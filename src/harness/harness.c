@@ -608,7 +608,7 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
     } else if (MATCH("General", "SSAO")) {
         harness_game_config.gl_ssao = (value[0] == '1');
     } else if (MATCH("General", "SSAOStrength")) {
-        harness_game_config.gl_ssao_strength = ClampConfigFloat(atof(value), 0.0f, 1.0f);
+        harness_game_config.gl_ssao_strength = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "SSAORadius")) {
         harness_game_config.gl_ssao_radius = ClampConfigFloat(atof(value), 0.05f, 2.0f);
     } else if (MATCH("General", "SpeedBlur")) {
