@@ -619,7 +619,8 @@ void PDAllocateScreenAndBack(void) {
     if (harness_game_config.opengl_3dfx_mode) {
         if (gGraf_spec_index != 0 && !gNo_voodoo) {
             gl_callbacks.get_proc_address = gHarness_platform.GL_GetProcAddress;
-            gl_callbacks.swap_buffers = gHarness_platform.Swap;
+            gl_callbacks.swap_buffers = Harness_GL_SwapBuffers;
+            gl_callbacks.overlay_regions = Harness_GL_OverlayRegions;
             gl_callbacks.get_viewport = gHarness_platform.GetViewport;
             gl_callbacks.adjust_render_viewport = Harness_GL_AdjustRenderViewport;
             gl_callbacks.texture_upscaler = harness_game_config.texture_upscaler;

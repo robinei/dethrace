@@ -8,6 +8,7 @@
 #include "globvrpb.h"
 #include "grafdata.h"
 #include "graphics.h"
+#include "harness/hooks.h"
 #include "harness/trace.h"
 #include "input.h"
 #include "loading.h"
@@ -462,6 +463,12 @@ void DoPratcam(tU32 pThe_time) {
     br_pixelmap* the_image;
     br_pixelmap* right_image;
     br_pixelmap* left_image;
+#ifdef DETHRACE_3DFX_PATCH
+    float hud_shift;
+    float hud_2d_factor;
+    float hud_2d_x;
+    br_camera* camera_2d;
+#endif
 
     if (gAusterity_mode) {
         return;
@@ -504,6 +511,19 @@ void DoPratcam(tU32 pThe_time) {
     if (!right_hand) {
         offset = -offset;
     }
+#ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: move the pratcam to the edge of a widescreen window. The picture is drawn with the
+    // 2d camera (moved here), its border into the 2d layer (moved by the overlay region)
+    hud_shift = Harness_Hook_HudShift(
+        gProgram_state.current_car.prat_left - (left_image != NULL ? left_image->width : 0),
+        gProgram_state.current_car.prat_right + (right_image != NULL ? right_image->width : 0));
+    Harness_Hook_HudRegion(
+        gProgram_state.current_car.prat_left - (left_image != NULL ? left_image->width : 0) + offset,
+        gProgram_state.current_car.prat_top + y_offset - (gProgram_state.current_car.prat_cam_top != NULL ? gProgram_state.current_car.prat_cam_top->height : 0) - 1,
+        gProgram_state.current_car.prat_right + offset + (right_image != NULL ? right_image->width : 0),
+        gProgram_state.current_car.prat_bottom + y_offset + (gProgram_state.current_car.prat_cam_bottom != NULL ? gProgram_state.current_car.prat_cam_bottom->height : 0),
+        hud_shift);
+#endif
     old_last_time = gLast_pratcam_frame_time;
 
     DontLetFlicFuckWithPalettes();
@@ -545,8 +565,10 @@ void DoPratcam(tU32 pThe_time) {
 #ifdef DETHRACE_3DFX_PATCH
     PDUnlockRealBackScreen(1);
     if (gDevious_2d) {
-        gPrat_model->vertices[1].p.v[0] = gProgram_state.current_car.prat_left + offset;
-        gPrat_model->vertices[0].p.v[0] = gProgram_state.current_car.prat_left + offset;
+        // the 2d camera is widened to the whole window, and maps from its left edge
+        hud_2d_factor = Harness_Hook_Hud2dBegin(&hud_2d_x);
+        gPrat_model->vertices[1].p.v[0] = gProgram_state.current_car.prat_left + offset + hud_shift - hud_2d_x;
+        gPrat_model->vertices[0].p.v[0] = gProgram_state.current_car.prat_left + offset + hud_shift - hud_2d_x;
         gPrat_model->vertices[3].p.v[1] = -(y_offset + gProgram_state.current_car.prat_top);
         gPrat_model->vertices[0].p.v[1] = -(y_offset + gProgram_state.current_car.prat_top);
 
@@ -561,7 +583,11 @@ void DoPratcam(tU32 pThe_time) {
         gPrat_buffer->map = gRender_palette;
         BrMapAdd(gPrat_buffer);
         BrMaterialUpdate(gPrat_material, BR_MATU_ALL);
+        camera_2d = g2d_camera->type_data;
+        camera_2d->width *= hud_2d_factor;
         BrZbSceneRender(g2d_camera, g2d_camera, gBack_screen, gDepth_buffer);
+        camera_2d->width /= hud_2d_factor;
+        Harness_Hook_Hud2dEnd();
         BrMapRemove(gPrat_buffer);
         gPrat_actor->render_style = BR_RSTYLE_NONE;
     } else {

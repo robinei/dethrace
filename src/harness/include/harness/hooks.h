@@ -123,6 +123,21 @@ int Harness_ConsumeFocusLost(void);
 void Harness_Hook_WidescreenFillBackground(br_pixelmap* pixelmap, br_uint_16 colour_565);
 // glrend `adjust_render_viewport` callback
 void Harness_GL_AdjustRenderViewport(br_pixelmap* target, int* x, int* y, int* width, int* height);
+
+// Widescreen HUD: while the 3d view of the current frame is extended, HUD elements towards the sides of the
+// 640x480 interface are moved out to the window edges.
+// Horizontal shift (interface pixels) for an element spanning `left` to `right`: 0 when not moving it
+float Harness_Hook_HudShift(int left, int right);
+// The overlay (2d layer) pixels in this rectangle belong to an element moved by `shift`
+void Harness_Hook_HudRegion(int left, int top, int right, int bottom, float shift);
+// Around rendering the 2d camera (dimmed boxes, pratcam): widens its viewport to the window, so moved
+// elements are not clipped. Returns the factor to widen the 2d camera by (1.0 if not widened) and sets
+// `x_offset` to the distance to move the camera by (interface pixels; it maps from the left edge)
+float Harness_Hook_Hud2dBegin(float* x_offset);
+void Harness_Hook_Hud2dEnd(void);
+// glrend callbacks
+int Harness_GL_OverlayRegions(const float** regions);
+void Harness_GL_SwapBuffers(br_pixelmap* pm);
 int Harness_Hook_ScaleEmissionCountWithDt(float count, float dt_seconds);
 
 #endif

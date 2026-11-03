@@ -35,6 +35,10 @@ TextureFiltering = linear
 ; Only used in 3dfx mode. Extend the 3d view to fill widescreen windows. The interface stays 4:3, centered
 Widescreen = 1
 
+; Only used with Widescreen. In the external view, move the HUD elements at the sides (pratcam, lap and
+; kill counters, speedo, damage display, power-ups) out to the window edges. Centred ones stay centred
+WidescreenHud = 1
+
 ; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1

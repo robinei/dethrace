@@ -9,6 +9,7 @@
 #include "globvrpb.h"
 #include "grafdata.h"
 #include "graphics.h"
+#include "harness/hooks.h"
 #include "harness/trace.h"
 #include "input.h"
 #include "loading.h"
@@ -479,6 +480,15 @@ void DrawPowerups(tU32 pTime) {
             }
         }
 
+#ifdef DETHRACE_3DFX_PATCH
+        // Added by dethrace: widescreen HUD, move the icon and its counter to the window edge
+        {
+            int left = MIN(gCurrent_graf_data->power_up_icon_x, gCurrent_graf_data->power_up_icon_countdown_x);
+            int right = MAX(gCurrent_graf_data->power_up_icon_x + the_powerup->icon->width, gCurrent_graf_data->power_up_icon_countdown_x + 30);
+            int bottom = y + MAX(the_powerup->icon->height, gCurrent_graf_data->power_up_icon_countdown_y_offset + gFonts[kFont_ORANGHED].height);
+            Harness_Hook_HudRegion(left, y, right, bottom, Harness_Hook_HudShift(left, right));
+        }
+#endif
         if (the_icon->fizzle_stage >= 4) {
             DRPixelmapRectangleMaskedCopy(gBack_screen,
                 gCurrent_graf_data->power_up_icon_x, y,

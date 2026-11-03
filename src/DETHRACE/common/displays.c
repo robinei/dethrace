@@ -12,10 +12,12 @@
 #include "globvrpb.h"
 #include "grafdata.h"
 #include "graphics.h"
+#include "harness/hooks.h"
 #include "harness/trace.h"
 #include "netgame.h"
 #include "pd/sys.h"
 #include "utility.h"
+#include <limits.h>
 #include <stdlib.h>
 
 // GLOBAL: CARM95 0x00521678
@@ -299,15 +301,23 @@ void DRPixelmapCleverText2(br_pixelmap* pPixelmap, int pX, int pY, tDR_font* pFo
 #ifdef DETHRACE_3DFX_PATCH
 // IDA: void __usercall DeviouslyDimRectangle(br_pixelmap *pPixelmap@<EAX>, int pLeft@<EDX>, int pTop@<EBX>, int pRight@<ECX>, int pBottom, int pKnock_out_corners)
 void DeviouslyDimRectangle(br_pixelmap* pPixelmap, int pLeft, int pTop, int pRight, int pBottom, int pKnock_out_corners) {
+    float hud_shift;
+    float hud_2d_factor;
+    float hud_2d_x;
+    br_camera* camera_2d;
 
     if (pPixelmap != gBack_screen) {
         FatalError(kFatalError_CanOnlyDimRectanglesOfgBack_screen);
     }
 
-    gDim_model->vertices[1].p.v[0] = pLeft;
-    gDim_model->vertices[0].p.v[0] = pLeft;
-    gDim_model->vertices[3].p.v[0] = pRight;
-    gDim_model->vertices[2].p.v[0] = pRight;
+    // Added by dethrace: move with the HUD element it is behind to the edge of a widescreen window. The
+    // 2d camera is widened to the whole window for that, and maps from its left edge
+    hud_2d_factor = Harness_Hook_Hud2dBegin(&hud_2d_x);
+    hud_shift = Harness_Hook_HudShift(pLeft, pRight) - hud_2d_x;
+    gDim_model->vertices[1].p.v[0] = pLeft + hud_shift;
+    gDim_model->vertices[0].p.v[0] = pLeft + hud_shift;
+    gDim_model->vertices[3].p.v[0] = pRight + hud_shift;
+    gDim_model->vertices[2].p.v[0] = pRight + hud_shift;
     gDim_model->vertices[3].p.v[1] = -pTop;
     gDim_model->vertices[0].p.v[1] = -pTop;
     gDim_model->vertices[2].p.v[1] = -pBottom;
@@ -315,7 +325,11 @@ void DeviouslyDimRectangle(br_pixelmap* pPixelmap, int pLeft, int pTop, int pRig
     BrModelUpdate(gDim_model, BR_MODU_VERTEX_POSITIONS);
     gDim_actor->render_style = BR_RSTYLE_FACES;
     PDUnlockRealBackScreen(1);
+    camera_2d = g2d_camera->type_data;
+    camera_2d->width *= hud_2d_factor;
     BrZbSceneRender(g2d_camera, g2d_camera, gBack_screen, gDepth_buffer);
+    camera_2d->width /= hud_2d_factor;
+    Harness_Hook_Hud2dEnd();
     PDLockRealBackScreen(1);
     gDim_actor->render_style = BR_RSTYLE_NONE;
 }
@@ -370,6 +384,60 @@ void DimRectangle(br_pixelmap* pPixelmap, int pLeft, int pTop, int pRight, int p
     }
 }
 
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: widescreen HUD. The 2d layer pixels of an element in the left or right third of the
+// interface are moved to that edge of the window (does nothing unless the frame's 3d view is extended)
+static void HudRegion(int pLeft, int pTop, int pRight, int pBottom) {
+
+    Harness_Hook_HudRegion(pLeft, pTop, pRight, pBottom, Harness_Hook_HudShift(pLeft, pRight));
+}
+
+static void HudImageRegion(br_pixelmap* pImage, int pX, int pY, int pWidth, int pHeight) {
+
+    if (pImage != NULL) {
+        HudRegion(pX, pY, pX + pWidth, pY + pHeight);
+    }
+}
+
+static void HudHeadupRegion(tHeadup* pHeadup) {
+    int left;
+    int top;
+    int right;
+    int bottom;
+
+    left = pHeadup->x;
+    top = pHeadup->y;
+    switch (pHeadup->type) {
+    case eHeadup_text:
+        right = left + BrPixelmapTextWidth(gBack_screen, pHeadup->data.text_info.font, pHeadup->data.text_info.text);
+        bottom = top + pHeadup->data.text_info.font->glyph_y;
+        break;
+    case eHeadup_coloured_text:
+        if (pHeadup->clever) {
+            right = left + DRTextCleverWidth(pHeadup->data.coloured_text_info.coloured_font, (signed char*)pHeadup->data.coloured_text_info.text);
+        } else {
+            right = left + DRTextWidth(pHeadup->data.coloured_text_info.coloured_font, pHeadup->data.coloured_text_info.text);
+        }
+        bottom = top + pHeadup->data.coloured_text_info.coloured_font->height;
+        break;
+    case eHeadup_image:
+        right = left + pHeadup->data.image_info.image->width;
+        bottom = top + pHeadup->data.image_info.image->height;
+        break;
+    default:
+        // fancy (sliding) and boxed headups are centred
+        return;
+    }
+    if (pHeadup->dimmed_background) {
+        left = MIN(left, pHeadup->dim_left);
+        top = MIN(top, pHeadup->dim_top);
+        right = MAX(right, pHeadup->dim_right);
+        bottom = MAX(bottom, pHeadup->dim_bottom);
+    }
+    HudRegion(left, top, right, bottom);
+}
+#endif
+
 // IDA: void __cdecl DimAFewBits()
 // FUNCTION: CARM95 0x004c479c
 void DimAFewBits(void) {
@@ -419,6 +487,14 @@ void DoPSPowerHeadup(int pY, int pLevel, char* pName, int pBar_colour) {
     }
 #endif
 
+#ifdef DETHRACE_3DFX_PATCH
+    HudRegion(
+        MIN(gCurrent_graf_data->ps_dim_left, MIN(gCurrent_graf_data->ps_name_left,
+            gCurrent_graf_data->ps_bar_left - gCurrent_graf_data->ps_x_pitch * ((6 - gCurrent_graf_data->ps_bars_per_level) * gCurrent_graf_data->ps_bars_per_level + 1))),
+        pY,
+        MAX(gCurrent_graf_data->ps_dim_right, gCurrent_graf_data->ps_bar_left + 1),
+        MAX(gCurrent_graf_data->ps_dim_height, gCurrent_graf_data->ps_bar_top_border + gCurrent_graf_data->ps_bar_height + 1) + pY);
+#endif
     DimRectangle(gBack_screen, gCurrent_graf_data->ps_dim_left, pY, gCurrent_graf_data->ps_dim_right, gCurrent_graf_data->ps_dim_height + pY, 1);
     TransDRPixelmapText(gBack_screen, gCurrent_graf_data->ps_name_left, gCurrent_graf_data->ps_name_top_border + pY, gFonts + 6, pName, gBack_screen->width);
 
@@ -476,6 +552,9 @@ void DoHeadups(tU32 pThe_time) {
             if (the_headup->type != eHeadup_fancy && the_headup->end_time != 0 && the_headup->end_time <= pThe_time) {
                 ClearHeadup(i);
             } else {
+#ifdef DETHRACE_3DFX_PATCH
+                HudHeadupRegion(the_headup);
+#endif
                 if (the_headup->dimmed_background) {
                     DimRectangle(
                         gBack_screen,
@@ -1080,6 +1159,31 @@ void DoDamageScreen(tU32 pThe_time) {
                 gProgram_state.current_car.damage_background->height);
         }
     }
+#ifdef DETHRACE_3DFX_PATCH
+    if (!gProgram_state.cockpit_on || gProgram_state.cockpit_image_index < 0) {
+        // Added by dethrace: widescreen HUD, the whole damage display moves together
+        int left = INT_MAX, top = INT_MAX, right = INT_MIN, bottom = INT_MIN;
+        if (gProgram_state.current_car.damage_background != NULL) {
+            left = gProgram_state.current_car.damage_background_x;
+            top = gProgram_state.current_car.damage_background_y;
+            right = left + gProgram_state.current_car.damage_background->width;
+            bottom = top + gProgram_state.current_car.damage_background->height;
+        }
+        for (i = 0; i < COUNT_OF(gProgram_state.current_car.damage_units); i++) {
+            if (i != eDamage_driver) {
+                the_damage = &gProgram_state.current_car.damage_units[i];
+                the_image = the_damage->images;
+                left = MIN(left, the_wobble_x + the_damage->x_coord);
+                top = MIN(top, the_wobble_y + the_damage->y_coord);
+                right = MAX(right, the_wobble_x + the_damage->x_coord + the_image->width);
+                bottom = MAX(bottom, the_wobble_y + the_damage->y_coord + (the_image->height / 2) / 5);
+            }
+        }
+        if (left < right) {
+            HudRegion(left, top, right, bottom);
+        }
+    }
+#endif
     for (i = 0; i < COUNT_OF(gProgram_state.current_car.damage_units); i++) {
         if (i != eDamage_driver) {
             the_damage = &gProgram_state.current_car.damage_units[i];
@@ -1391,6 +1495,26 @@ void DoInstruments(tU32 pThe_time) {
                     speedo_image->height);
             }
     }
+#ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: widescreen HUD
+    if (!gProgram_state.cockpit_on || gProgram_state.cockpit_image_index < 0) {
+        tacho_image = gProgram_state.current_car.tacho_image[0];
+        speedo_image = gProgram_state.current_car.speedo_image[0];
+        HudImageRegion(tacho_image, gProgram_state.current_car.tacho_x[0], gProgram_state.current_car.tacho_y[0],
+            tacho_image != NULL ? tacho_image->width : 0, tacho_image != NULL ? tacho_image->height : 0);
+        if (gProgram_state.current_car.speedo_radius_2[0] < 0) {
+            HudImageRegion(speedo_image, gProgram_state.current_car.speedo_x[0], gProgram_state.current_car.speedo_y[0],
+                2 * gProgram_state.current_car.speedo_x_pitch[0] + (speedo_image != NULL ? speedo_image->width : 0),
+                gProgram_state.current_car.speedo_y_pitch[0]);
+        } else {
+            HudImageRegion(speedo_image, gProgram_state.current_car.speedo_x[0], gProgram_state.current_car.speedo_y[0],
+                speedo_image != NULL ? speedo_image->width : 0, speedo_image != NULL ? speedo_image->height : 0);
+        }
+        HudImageRegion(gProgram_state.current_car.gears_image, gProgram_state.current_car.gear_x[0], gProgram_state.current_car.gear_y[0],
+            gProgram_state.current_car.gears_image != NULL ? gProgram_state.current_car.gears_image->width : 0,
+            gProgram_state.current_car.gears_image != NULL ? gProgram_state.current_car.gears_image->height / 8 : 0);
+    }
+#endif
 }
 
 // IDA: void __usercall DoSteeringWheel(tU32 pThe_time@<EAX>)

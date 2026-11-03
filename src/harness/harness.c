@@ -297,6 +297,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_nearest_filtering = 0;
     harness_game_config.gl_sharp_filtering = 0;
     harness_game_config.gl_widescreen = 1;
+    harness_game_config.gl_widescreen_hud = 1;
     harness_game_config.draw_distance = 1.0f;
     harness_game_config.max_detail = 0;
     harness_game_config.msaa_samples = 4;
@@ -564,6 +565,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         }
     } else if (MATCH("General", "Widescreen")) {
         harness_game_config.gl_widescreen = (value[0] == '1');
+    } else if (MATCH("General", "WidescreenHud")) {
+        harness_game_config.gl_widescreen_hud = (value[0] == '1');
     } else if (MATCH("General", "PhysicsPerFrame")) {
         harness_game_config.physics_per_frame = (value[0] == '1');
     }
@@ -681,6 +684,14 @@ int Harness_Hook_isalnum(int c) {
 static br_pixelmap* widescreen_back_screen;
 static br_pixelmap* widescreen_render_screen;
 
+// Widescreen HUD, valid until the end of the frame
+static br_pixelmap* hud_back_screen;
+static float hud_factor;  // window width / interface width
+static float hud_margin;  // width of each side area, interface pixels
+static int hud_2d_wide;
+static float hud_regions[5 * BR_GL_MAX_OVERLAY_REGIONS];
+static int hud_region_count;
+
 // Window width divided by the width of the 4:3 interface area
 static float widescreen_factor(br_pixelmap* back_screen) {
     int x, y;
@@ -714,7 +725,70 @@ float Harness_Hook_WidescreenBeginView(br_pixelmap* back_screen, br_pixelmap* re
     }
     widescreen_back_screen = back_screen;
     widescreen_render_screen = render_screen;
+    if (harness_game_config.gl_widescreen_hud) {
+        hud_back_screen = back_screen;
+        hud_factor = factor;
+        hud_margin = (factor - 1.0f) * back_screen->width / 2.0f;
+    }
     return factor;
+}
+
+float Harness_Hook_HudShift(int left, int right) {
+    int centre;
+
+    if (hud_back_screen == NULL) {
+        return 0.0f;
+    }
+    // elements in the left or right third go to that edge; the ones in the middle (timer, messages) stay
+    centre = (left + right) / 2;
+    if (3 * centre < hud_back_screen->width) {
+        return -hud_margin;
+    }
+    if (3 * centre > 2 * hud_back_screen->width) {
+        return hud_margin;
+    }
+    return 0.0f;
+}
+
+void Harness_Hook_HudRegion(int left, int top, int right, int bottom, float shift) {
+    float* r;
+
+    if (hud_back_screen == NULL || shift == 0.0f || right <= left || bottom <= top || hud_region_count >= BR_GL_MAX_OVERLAY_REGIONS) {
+        return;
+    }
+    r = &hud_regions[5 * hud_region_count++];
+    r[0] = (float)left;
+    r[1] = (float)top;
+    r[2] = (float)right;
+    r[3] = (float)bottom;
+    r[4] = shift;
+}
+
+float Harness_Hook_Hud2dBegin(float* x_offset) {
+    *x_offset = 0.0f;
+    if (hud_back_screen == NULL) {
+        return 1.0f;
+    }
+    hud_2d_wide = 1;
+    *x_offset = -hud_margin;
+    return hud_factor;
+}
+
+void Harness_Hook_Hud2dEnd(void) {
+    hud_2d_wide = 0;
+}
+
+int Harness_GL_OverlayRegions(const float** regions) {
+    *regions = hud_regions;
+    return hud_back_screen != NULL ? hud_region_count : 0;
+}
+
+void Harness_GL_SwapBuffers(br_pixelmap* pm) {
+    gHarness_platform.Swap(pm);
+    // the HUD positions are set up again by the next frame
+    hud_back_screen = NULL;
+    hud_region_count = 0;
+    hud_2d_wide = 0;
 }
 
 static int harness_focus_lost;
@@ -765,12 +839,15 @@ void Harness_GL_AdjustRenderViewport(br_pixelmap* target, int* x, int* y, int* w
     int vx, vy;
     float sx, sy;
 
-    if (target == NULL || target != widescreen_render_screen || gHarness_platform.GetViewport == NULL) {
+    if (target == NULL || gHarness_platform.GetViewport == NULL) {
+        return;
+    }
+    if (target != widescreen_render_screen && !(hud_2d_wide && target == hud_back_screen)) {
         return;
     }
     gHarness_platform.GetViewport(&vx, &vy, &sx, &sy);
     *x = 0;
-    *width = 2 * vx + (int)(widescreen_back_screen->width * sx + 0.5f);
+    *width = 2 * vx + (int)(target->width * sx + 0.5f);
 }
 
 // For physics-per-frame. We are calling some functions more often (like SkidNoise), so need to reduce the probability
