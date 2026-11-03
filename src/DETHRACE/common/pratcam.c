@@ -316,6 +316,16 @@ void PratcamEvent(int pIndex) {
     if (gRace_finished || gInterface_within_race_mode) {
         return;
     }
+#ifdef DETHRACE_GAMEPAD
+    // Added by dethrace: rumble on the player's big moments
+    if (pIndex == kPratcam_killed_one_ped) {
+        PDGamepadRumble(0.4f, 140);
+    } else if (pIndex == kPratcam_killed_lots_of_peds) {
+        PDGamepadRumble(0.7f, 250);
+    } else if (pIndex == kPratcam_opponent_wasted) {
+        PDGamepadRumble(1.f, 450);
+    }
+#endif
 #if defined(DETHRACE_FIX_BUGS)
     // In low memory mode, `gPratcam_sequences`is not allocated and thus unsafe to access
     if (gAusterity_mode) {

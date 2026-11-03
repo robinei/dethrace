@@ -35,6 +35,28 @@ TextureFiltering = linear
 ; Only used in 3dfx mode. Extend the 3d view to fill widescreen windows. The interface stays 4:3, centered
 Widescreen = 1
 
+; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
+; degrees wider. The cockpit view is unchanged
+FOVScale = 1
+
+; Only used in 3dfx mode. 1 = vsync on, 0 = off, adaptive = vsync, but a frame that is late is shown
+; immediately (may tear briefly) instead of waiting a whole refresh. Variable refresh rate displays work with 1
+VSync = 1
+
+; Open the in-race menu (pausing the game) when the window loses focus, eg. on alt-tab
+PauseOnFocusLoss = 1
+
+; Game controller rumble on impacts, pedestrian hits and wrecking opponents
+GamepadRumble = 1
+
+; Game controller tuning. Stick and trigger deadzones (0-0.9)
+GamepadStickDeadzone = 0.15
+GamepadTriggerDeadzone = 0.05
+; Steering response curve: steering = stick ^ curve. 1 is linear, higher is gentler near the centre
+GamepadSteeringCurve = 2.5
+; Speed sensitive steering: half the steering lock is available at this speed (mph). 0 disables
+GamepadSteeringSpeed = 60
+
 ; Multiply the draw distance chosen in the game's options. Fog and darkness move out with it
 DrawDistance = 1
 

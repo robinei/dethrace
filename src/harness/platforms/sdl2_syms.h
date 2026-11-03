@@ -48,6 +48,7 @@
     X(GameControllerName, const char*, (SDL_GameController*))                           \
     X(GameControllerGetButton, Uint8, (SDL_GameController*, SDL_GameControllerButton))  \
     X(GameControllerGetAxis, Sint16, (SDL_GameController*, SDL_GameControllerAxis))     \
+    X(GameControllerRumble, int, (SDL_GameController*, Uint16, Uint16, Uint32))         \
     X(GameControllerGetJoystick, SDL_Joystick*, (SDL_GameController*))                  \
     X(JoystickInstanceID, SDL_JoystickID, (SDL_Joystick*))                              \
     X(free, void, (void*))

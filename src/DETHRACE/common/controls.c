@@ -1,4 +1,5 @@
 #include "controls.h"
+#include "harness/config.h"
 
 #include "brender.h"
 #include "brucetrk.h"
@@ -1943,12 +1944,10 @@ void BrakeInstantly(void) {
 // Added by dethrace: time (ms) for the gamepad steering to go from straight ahead to full lock, and back
 #define GAMEPAD_STEER_TIME_TO_FULL_LOCK 150.f
 #define GAMEPAD_STEER_TIME_TO_CENTRE 100.f
-// steering lock = stick ^ GAMEPAD_STEER_EXPONENT. Higher is less sensitive near the centre
-#define GAMEPAD_STEER_EXPONENT 2.5f
-// Speed sensitive steering: the available lock is 1 / (1 + (speed / GAMEPAD_STEER_SPEED_MPH) ^ 1.5),
-// ie. full lock when stopped, half lock at GAMEPAD_STEER_SPEED_MPH. Note the game also gives the rear tyres less
-// grip (for sliding) above 25% lock, like when holding a steering key
-#define GAMEPAD_STEER_SPEED_MPH 60.f
+// steering lock = stick ^ GamepadSteeringCurve (default 2.5). Higher is less sensitive near the centre
+// Speed sensitive steering: the available lock is 1 / (1 + (speed / GamepadSteeringSpeed) ^ 1.5),
+// ie. full lock when stopped, half lock at GamepadSteeringSpeed mph (default 60, 0 disables). Note the game
+// also gives the rear tyres less grip (for sliding) above 25% lock, like when holding a steering key
 #endif
 
 // IDA: void __usercall PollCarControls(tU32 pTime_difference@<EAX>)
@@ -2070,9 +2069,11 @@ void PollCarControls(tU32 pTime_difference) {
             if (gGamepad_steering && joystick.left < 0 && joystick.right < 0) {
                 // Move the lock towards the stick position at a limited rate (like the keyboard controls),
                 // rather than snapping to it. The game squares the joystick value to get the lock, so pass sqrt(lock)
-                pad_lock = pad_steering < 0.f ? -powf(-pad_steering, GAMEPAD_STEER_EXPONENT) : powf(pad_steering, GAMEPAD_STEER_EXPONENT);
+                pad_lock = pad_steering < 0.f ? -powf(-pad_steering, harness_game_config.gamepad_steering_curve) : powf(pad_steering, harness_game_config.gamepad_steering_curve);
                 speed_mph = fabsf(c->speedo_speed) * WORLD_SCALE / 1600.f * 3600000.f;
-                pad_lock /= 1.f + powf(speed_mph / GAMEPAD_STEER_SPEED_MPH, 1.5f);
+                if (harness_game_config.gamepad_steering_speed > 0.f) {
+                    pad_lock /= 1.f + powf(speed_mph / harness_game_config.gamepad_steering_speed, 1.5f);
+                }
                 if (pad_lock * gGamepad_lock >= 0.f && fabsf(pad_lock) > fabsf(gGamepad_lock)) {
                     max_change = pTime_difference / GAMEPAD_STEER_TIME_TO_FULL_LOCK;
                 } else {

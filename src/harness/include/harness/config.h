@@ -71,6 +71,14 @@ typedef struct tHarness_game_config {
     int msaa_samples;
     int supersampling;
     int texture_upscaler; /* 0 = none, 1 = MMPX 2x, 2 = xBR 2x */
+    float fov_scale;
+    int gamepad_rumble;
+    int vsync; /* 1 = on, 0 = off, -1 = adaptive */
+    int pause_on_focus_loss;
+    float gamepad_stick_deadzone;
+    float gamepad_trigger_deadzone;
+    float gamepad_steering_curve;
+    float gamepad_steering_speed;
 
     int install_signalhandler;
     int no_bind;

@@ -183,6 +183,11 @@ static void SDL2_Harness_ProcessWindowMessages(void) {
         case SDL_WINDOWEVENT:
             if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
                 calculate_viewport(event.window.data1, event.window.data2);
+            } else if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+                Harness_Hook_FocusLost();
+            } else if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
+                // a loss outside a race (eg. in the menus) should not pause the next race
+                Harness_ConsumeFocusLost();
             }
             break;
 
@@ -228,6 +233,17 @@ static void SDL2_Harness_GetGamepadState(tHarness_gamepad_state* state) {
     state->right_y = controller_axis(SDL_CONTROLLER_AXIS_RIGHTY);
     state->left_trigger = controller_axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT);
     state->right_trigger = controller_axis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+}
+
+static void SDL2_Harness_SetGamepadRumble(float low_frequency, float high_frequency, unsigned duration_ms) {
+    if (game_controller == NULL) {
+        return;
+    }
+    if (low_frequency < 0.f) low_frequency = 0.f;
+    if (low_frequency > 1.f) low_frequency = 1.f;
+    if (high_frequency < 0.f) high_frequency = 0.f;
+    if (high_frequency > 1.f) high_frequency = 1.f;
+    SDL2_GameControllerRumble(game_controller, (Uint16)(low_frequency * 65535.f), (Uint16)(high_frequency * 65535.f), duration_ms);
 }
 
 static void SDL2_Harness_SetKeyHandler(void (*handler_func)(void)) {
@@ -406,7 +422,16 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
         if (gl_context == NULL) {
             LOG_PANIC2("Failed to create OpenGL context: %s", SDL2_GetError());
         }
-        SDL2_GL_SetSwapInterval(1);
+        // VSync = 1 (default), 0 (off), or adaptive: vsync, but a late frame is shown immediately (may tear)
+        // instead of waiting for the next refresh. Falls back to normal vsync if the driver lacks it
+        if (harness_game_config.vsync < 0) {
+            if (SDL2_GL_SetSwapInterval(-1) != 0) {
+                LOG_WARN("Adaptive vsync not supported, using normal vsync");
+                SDL2_GL_SetSwapInterval(1);
+            }
+        } else {
+            SDL2_GL_SetSwapInterval(harness_game_config.vsync ? 1 : 0);
+        }
         if (harness_game_config.supersampling) {
             enable_sample_shading();
         }
@@ -517,6 +542,7 @@ static int SDL2_Harness_Platform_Init(tHarness_platform* platform) {
     platform->GL_GetProcAddress = SDL2_GL_GetProcAddress;
     platform->GetViewport = SDL2_Harness_GetViewport;
     platform->GetGamepadState = SDL2_Harness_GetGamepadState;
+    platform->SetGamepadRumble = SDL2_Harness_SetGamepadRumble;
     return 0;
 };
 

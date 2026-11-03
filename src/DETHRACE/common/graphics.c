@@ -13,6 +13,7 @@
 #include "globvrbm.h"
 #include "globvrpb.h"
 #include "grafdata.h"
+#include "harness/config.h"
 #include "harness/hooks.h"
 #include "harness/os.h"
 #include "harness/trace.h"
@@ -1920,6 +1921,7 @@ void RenderAFrame(int pDepth_mask_on) {
 #ifdef DETHRACE_3DFX_PATCH
     float widescreen_factor;
     br_scalar old_aspect;
+    br_angle old_fov;
 #endif
 
 #ifdef DETHRACE_FIX_BUGS
@@ -2060,6 +2062,12 @@ void RenderAFrame(int pDepth_mask_on) {
     widescreen_factor = Harness_Hook_WidescreenBeginView(gBack_screen, gRender_screen, !cockpit_on && !gMap_mode);
     old_aspect = ((br_camera*)gCamera->type_data)->aspect;
     ((br_camera*)gCamera->type_data)->aspect *= widescreen_factor;
+    old_fov = ((br_camera*)gCamera->type_data)->field_of_view;
+    if (harness_game_config.fov_scale != 1.f && !cockpit_on && !gMap_mode) {
+        // Added by dethrace: wider (or narrower) external view. Scales the view's extent, so the
+        // horizontal and vertical field of view both change and widescreen stays Hor+
+        ((br_camera*)gCamera->type_data)->field_of_view = BrRadianToAngle(2.f * atanf(tanf(BrAngleToRadian(old_fov) / 2.f) * harness_game_config.fov_scale));
+    }
 #endif
 
 #ifdef DETHRACE_3DFX_PATCH
@@ -2114,6 +2122,7 @@ void RenderAFrame(int pDepth_mask_on) {
 
     // Added by dethrace
     ((br_camera*)gCamera->type_data)->aspect = old_aspect;
+    ((br_camera*)gCamera->type_data)->field_of_view = old_fov;
     Harness_Hook_WidescreenEndView();
 #endif
 

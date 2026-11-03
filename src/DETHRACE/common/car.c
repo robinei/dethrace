@@ -1091,6 +1091,8 @@ typedef struct tStep_start_pose {
     int interpolating;
     br_scalar t;
     br_scalar display_revs;
+    // AI steering snaps between a few fixed values: the wheels shown are rate limited towards it
+    br_scalar display_steering_angle;
 } tStep_start_pose;
 static tStep_start_pose gStep_start_poses[COUNT_OF(gActive_car_list)];
 static int gStep_start_pose_count;
@@ -1105,6 +1107,9 @@ static void RememberStepStartPoses(void) {
         tCar_spec* car = gActive_car_list[i];
         br_vector3 minus_k;
 
+        if (pose->car != car) {
+            pose->display_steering_angle = car->steering_angle;
+        }
         pose->car = car;
         BrMatrix34Copy(&pose->mat, &car->car_master_actor->t.t.mat);
         pose->interpolating = 0;
@@ -1297,6 +1302,18 @@ void FinishCars(tU32 pLast_frame_time, tU32 pTime) {
                     car->lf_sus_position = LerpScalar(pose->sus_position[2], car->lf_sus_position, pose->t);
                     car->rf_sus_position = LerpScalar(pose->sus_position[3], car->rf_sus_position, pose->t);
                     pose->display_revs = LerpScalar(pose->revs, car->revs, pose->t);
+                }
+                if (pose != NULL && car->driver < eDriver_net_human) {
+                    // turn the shown wheels at most 360 degrees per second (full lock in well under 0.1s)
+                    br_scalar max_change = 360.f * pTime / 1000.f;
+                    br_scalar change = car->steering_angle - pose->display_steering_angle;
+                    if (change > max_change) {
+                        change = max_change;
+                    } else if (change < -max_change) {
+                        change = -max_change;
+                    }
+                    pose->display_steering_angle += change;
+                    car->steering_angle = pose->display_steering_angle;
                 }
             }
 #endif
@@ -3684,6 +3701,16 @@ void CrushAndDamageCar(tCar_spec* c, br_vector3* pPosition, br_vector3* pForce_c
         BrVector3Scale(&force_for_bodywork, &force, 0.5f);
         if (c->driver == eDriver_local_human) {
             DoPratcamHit(&force);
+#ifdef DETHRACE_GAMEPAD
+            {
+                // same impact force the pratcam reacts to: small knocks barely register, big hits max out
+                br_scalar impact = BrVector3Length(&force);
+                if (impact > 0.03f) {
+                    br_scalar strength = MIN(impact / 0.45f, 1.f);
+                    PDGamepadRumble(0.2f + 0.8f * strength, (unsigned)(80.f + 220.f * strength));
+                }
+            }
+#endif
         }
     } else {
         BrVector3Scale(&force_for_bodywork, &force, 1.5f);

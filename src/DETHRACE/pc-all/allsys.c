@@ -247,8 +247,6 @@ int KeyDown22(int pKey_index) {
 // Buttons are injected into the key array, either as the key currently bound to a game action (while driving) or
 // as fixed keys (menus, action replay). The analog sticks and triggers drive the car through `PDGamepadAnalog`.
 
-#define GAMEPAD_STICK_DEADZONE 0.15f
-#define GAMEPAD_TRIGGER_DEADZONE 0.05f
 #define GAMEPAD_DIGITAL_THRESHOLD 0.5f
 // how long a context stays active after the game last reported it
 #define GAMEPAD_CONTEXT_TIMEOUT 150
@@ -423,13 +421,31 @@ static float GamepadApplyDeadzone(float pValue, float pDeadzone) {
     return pValue < 0.f ? -magnitude : magnitude;
 }
 
+void PDGamepadRumble(float pStrength, unsigned pDuration_ms) {
+    static float current_strength;
+    static tU32 current_end;
+    tU32 now;
+
+    if (!harness_game_config.gamepad_rumble || gHarness_platform.SetGamepadRumble == NULL) {
+        return;
+    }
+    now = PDGetTotalTime();
+    if (now < current_end && pStrength < current_strength) {
+        return;
+    }
+    current_strength = pStrength;
+    current_end = now + pDuration_ms;
+    // heavy motor carries the impact, the light one adds bite
+    gHarness_platform.SetGamepadRumble(pStrength, pStrength * 0.6f, pDuration_ms);
+}
+
 int PDGamepadAnalog(float* pSteering, float* pThrottle, float* pBrake) {
     if (!gGamepad.connected) {
         return 0;
     }
-    *pSteering = GamepadApplyDeadzone(gGamepad.left_x, GAMEPAD_STICK_DEADZONE);
-    *pThrottle = GamepadApplyDeadzone(gGamepad.right_trigger, GAMEPAD_TRIGGER_DEADZONE);
-    *pBrake = GamepadApplyDeadzone(gGamepad.left_trigger, GAMEPAD_TRIGGER_DEADZONE);
+    *pSteering = GamepadApplyDeadzone(gGamepad.left_x, harness_game_config.gamepad_stick_deadzone);
+    *pThrottle = GamepadApplyDeadzone(gGamepad.right_trigger, harness_game_config.gamepad_trigger_deadzone);
+    *pBrake = GamepadApplyDeadzone(gGamepad.left_trigger, harness_game_config.gamepad_trigger_deadzone);
     return 1;
 }
 #endif
@@ -981,6 +997,11 @@ void PDAllocateActionReplayBuffer(char** pBuffer, tU32* pBuffer_size) {
         } else {
             required = 65536;
         }
+#ifdef DETHRACE_FIX_BUGS
+        // Added by dethrace: the replay records every rendered frame, so at modern frame rates the original
+        // ~14MB only holds ~20 seconds (at 160fps) instead of ~3 minutes. Memory is cheap now.
+        required *= 8;
+#endif
         dr_dprintf("Allocated %u bytes to the action replay buffer for %s-res", required, gGraf_spec_index != 0 ? "high" : "low");
         *pBuffer = malloc(required);
         *pBuffer_size = required;

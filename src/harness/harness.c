@@ -301,6 +301,14 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.max_detail = 0;
     harness_game_config.msaa_samples = 4;
     harness_game_config.supersampling = 0;
+    harness_game_config.gamepad_rumble = 1;
+    harness_game_config.vsync = 1;
+    harness_game_config.pause_on_focus_loss = 1;
+    harness_game_config.gamepad_stick_deadzone = 0.15f;
+    harness_game_config.gamepad_trigger_deadzone = 0.05f;
+    harness_game_config.gamepad_steering_curve = 2.5f;
+    harness_game_config.gamepad_steering_speed = 60.f;
+    harness_game_config.fov_scale = 1.f;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -468,6 +476,10 @@ int Harness_ProcessCommandLine(int* argc, char* argv[]) {
     return 0;
 }
 
+static float ClampConfigFloat(float pValue, float pMin, float pMax) {
+    return pValue < pMin ? pMin : (pValue > pMax ? pMax : pValue);
+}
+
 static int Harness_Ini_Callback(void* user, const char* section, const char* name, const char* value) {
     int i;
     float f;
@@ -519,6 +531,29 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
             harness_game_config.texture_upscaler = 2;
         } else {
             harness_game_config.texture_upscaler = 0;
+        }
+    } else if (MATCH("General", "GamepadStickDeadzone")) {
+        harness_game_config.gamepad_stick_deadzone = ClampConfigFloat(atof(value), 0.f, 0.9f);
+    } else if (MATCH("General", "GamepadTriggerDeadzone")) {
+        harness_game_config.gamepad_trigger_deadzone = ClampConfigFloat(atof(value), 0.f, 0.9f);
+    } else if (MATCH("General", "GamepadSteeringCurve")) {
+        harness_game_config.gamepad_steering_curve = ClampConfigFloat(atof(value), 1.f, 5.f);
+    } else if (MATCH("General", "GamepadSteeringSpeed")) {
+        harness_game_config.gamepad_steering_speed = atof(value);
+    } else if (MATCH("General", "PauseOnFocusLoss")) {
+        harness_game_config.pause_on_focus_loss = (value[0] == '1');
+    } else if (MATCH("General", "VSync")) {
+        if (strcasecmp(value, "adaptive") == 0) {
+            harness_game_config.vsync = -1;
+        } else {
+            harness_game_config.vsync = (value[0] != '0');
+        }
+    } else if (MATCH("General", "GamepadRumble")) {
+        harness_game_config.gamepad_rumble = (value[0] == '1');
+    } else if (MATCH("General", "FOVScale")) {
+        harness_game_config.fov_scale = atof(value);
+        if (harness_game_config.fov_scale < 0.5f || harness_game_config.fov_scale > 2.5f) {
+            harness_game_config.fov_scale = 1.f;
         }
     } else if (MATCH("General", "Supersampling")) {
         harness_game_config.supersampling = (value[0] == '1');
@@ -680,6 +715,18 @@ float Harness_Hook_WidescreenBeginView(br_pixelmap* back_screen, br_pixelmap* re
     widescreen_back_screen = back_screen;
     widescreen_render_screen = render_screen;
     return factor;
+}
+
+static int harness_focus_lost;
+
+void Harness_Hook_FocusLost(void) {
+    harness_focus_lost = 1;
+}
+
+int Harness_ConsumeFocusLost(void) {
+    int lost = harness_focus_lost && harness_game_config.pause_on_focus_loss;
+    harness_focus_lost = 0;
+    return lost;
 }
 
 void Harness_Hook_WidescreenEndView(void) {

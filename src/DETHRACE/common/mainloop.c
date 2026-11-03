@@ -723,7 +723,12 @@ tRace_result MainGameLoop(void) {
             EnsurePaletteUp();
         }
         DoNetGameManagement();
+#ifdef DETHRACE_FIX_BUGS
+        // Added by dethrace: open the in-race menu (which pauses) when the window loses focus
+        if (((Harness_ConsumeFocusLost() && !gAction_replay_mode && gNet_mode == eNet_mode_none) || KeyIsDown(KEYMAP_ESCAPE)) && !gEntering_message) {
+#else
         if (KeyIsDown(KEYMAP_ESCAPE) && !gEntering_message) {
+#endif
             WaitForNoKeys();
             if (gAction_replay_mode) {
                 ToggleReplay();

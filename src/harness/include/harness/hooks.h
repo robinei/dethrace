@@ -77,6 +77,8 @@ typedef struct tHarness_platform {
     void (*GetViewport)(int* x, int* y, float* width_multiplier, float* height_multiplier);
     // Get the state of the first connected gamepad. Optional (may be NULL)
     void (*GetGamepadState)(tHarness_gamepad_state* state);
+    // 0..1 strength of the low (heavy) and high (light) frequency motors
+    void (*SetGamepadRumble)(float low_frequency, float high_frequency, unsigned duration_ms);
 
 } tHarness_platform;
 
@@ -113,6 +115,11 @@ int Harness_Hook_ScaleProbabilityWithDt(int min_inclusive, int max_inclusive, fl
 // Widescreen (OpenGL mode). Returns the factor to widen the camera aspect ratio by (1.0 if not extended).
 float Harness_Hook_WidescreenBeginView(br_pixelmap* back_screen, br_pixelmap* render_screen, int allow);
 void Harness_Hook_WidescreenEndView(void);
+
+// The window lost keyboard focus (eg. alt-tab). Harness_ConsumeFocusLost returns 1 once per loss when
+// PauseOnFocusLoss is enabled
+void Harness_Hook_FocusLost(void);
+int Harness_ConsumeFocusLost(void);
 void Harness_Hook_WidescreenFillBackground(br_pixelmap* pixelmap, br_uint_16 colour_565);
 // glrend `adjust_render_viewport` callback
 void Harness_GL_AdjustRenderViewport(br_pixelmap* target, int* x, int* y, int* width, int* height);

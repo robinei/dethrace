@@ -190,6 +190,8 @@ void PDGamepadSetContext(tPD_gamepad_context pContext);
 
 // Analog controls, after deadzones. steering: -1..1, throttle/brake: 0..1. Returns 0 if no gamepad is connected
 int PDGamepadAnalog(float* pSteering, float* pThrottle, float* pBrake);
+// Rumble with a 0..1 strength; a weaker request does not cut short a stronger one still running
+void PDGamepadRumble(float pStrength, unsigned pDuration_ms);
 #endif
 
 tS32 PDGetJoy1X(void);
