@@ -4207,7 +4207,7 @@ void SendAllPedestrianPositions(tPlayer_ID pPlayer) {
 }
 
 #ifdef DETHRACE_3DFX_PATCH
-// Added by dethrace: the nearest (up to pMax) pedestrians standing (not dead, not flung) within pMax_distance
+// Added by dethrace: the nearest (up to pMax) pedestrians drawn this frame, standing (not dead, not flung), within pMax_distance
 // of the camera, for their blob shadows: their feet in the camera's space and their (sprite) height. Returns
 // how many
 int GetPedestrianFeet(br_actor* pCamera, br_scalar pMax_distance, br_vector3* pFeet, br_scalar* pSizes, int pMax) {
@@ -4223,9 +4223,13 @@ int GetPedestrianFeet(br_actor* pCamera, br_scalar pMax_distance, br_vector3* pF
         pMax = COUNT_OF(distances);
     }
     count = 0;
-    for (i = 0; i < gPed_count; i++) {
-        ped = &gPedestrian_array[i];
-        // (the pedestrians live under gDont_render_actor, unrendered, and are drawn as lollipops)
+    // the pedestrians queued to be drawn this frame (they are drawn as lollipops, after this; the others keep
+    // stale positions)
+    for (i = 0; i < gNumber_of_lollipops; i++) {
+        if (gLollipops[i] == NULL || !ActorIsPedestrian(gLollipops[i])) {
+            continue;
+        }
+        ped = ActorToPedestrianData(gLollipops[i]);
         if (ped->actor == NULL || ped->actor->model == NULL || ped->actor->parent == NULL
             || ped->current_action == ped->fatal_car_impact_action || ped->current_action == ped->fatal_ground_impact_action
             || ped->current_action == ped->giblets_action || ped->mid_air) {
