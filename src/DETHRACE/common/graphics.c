@@ -2333,9 +2333,17 @@ void RenderAFrame(int pDepth_mask_on) {
         if (!gAusterity_mode) {
             ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 1);
         }
+#ifdef DETHRACE_3DFX_PATCH
+        // Added by dethrace: the translucent things are drawn last; with post-processing they leave the depth
+        // to the surfaces behind them, so ambient occlusion doesn't shade around smoke puffs
+        Harness_Hook_PostProcessDepthWrite(0);
+#endif
         RenderSplashes();
         RenderSmoke(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
         RenderSparks(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
+#ifdef DETHRACE_3DFX_PATCH
+        Harness_Hook_PostProcessDepthWrite(1);
+#endif
         RenderProximityRays(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
         BrZbSceneRenderEnd();
 #ifdef DETHRACE_3DFX_PATCH

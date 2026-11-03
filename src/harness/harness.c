@@ -858,6 +858,8 @@ typedef struct br_gl_post_params {
     float shimmers[4 * 8];
 } br_gl_post_params;
 br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen, br_boolean glow);
+void BR_PUBLIC_ENTRY BrGLPostProcessDepthWrite(br_pixelmap* screen, br_boolean enabled);
+static br_pixelmap* gPost_screen;
 void BR_PUBLIC_ENTRY BrGLPostProcessEnd(br_pixelmap* screen, const br_gl_post_params* params);
 
 int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
@@ -866,7 +868,17 @@ int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
             || harness_game_config.gl_speed_blur || harness_game_config.gl_heat_shimmer || harness_game_config.gl_colour_grading)) {
         return 0;
     }
-    return BrGLPostProcessBegin(screen, harness_game_config.gl_glow) == BRE_OK;
+    if (BrGLPostProcessBegin(screen, harness_game_config.gl_glow) != BRE_OK) {
+        return 0;
+    }
+    gPost_screen = screen;
+    return 1;
+}
+
+void Harness_Hook_PostProcessDepthWrite(int enabled) {
+    if (gPost_screen != NULL) {
+        BrGLPostProcessDepthWrite(gPost_screen, enabled);
+    }
 }
 
 void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* fires, int fire_count) {

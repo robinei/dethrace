@@ -142,6 +142,9 @@ void Harness_Hook_DistanceFade(int on);
 // Post-processing of the 3d view (OpenGL mode, depth of field). Begin returns whether it is in effect;
 // End is then called with the view camera's depth range
 int Harness_Hook_PostProcessBegin(br_pixelmap* screen);
+// While post-processing, stop or resume the 3d drawing writing depth (for the translucent smoke, sparks and
+// splashes drawn last, which ambient occlusion and depth of field would otherwise take for solid surfaces)
+void Harness_Hook_PostProcessDepthWrite(int enabled);
 // speed: 0..1 for the speed blur; fires: camera space position and strength of up to 8 fires (heat shimmer)
 void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* fires, int fire_count);
 
