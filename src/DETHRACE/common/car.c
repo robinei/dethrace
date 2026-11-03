@@ -5600,38 +5600,80 @@ void RestoreCameraPosition(int i) {
 }
 
 #ifdef DETHRACE_FIX_BUGS
-// Added by dethrace: the external camera turns with the car at once (the swing the original allows per
-// frame is only limited by the car's own rate of turn), so knocks and spins jerk the view. Ease the
-// direction the camera looks from towards the one the original logic wants, with the configured time
-// constant. pFollow: only track the direction (the camera is placed otherwise), pSnap: jump to it
-static void SmoothCameraDirection(br_vector3* pDirection, tU32 pTime, int pFollow, int pSnap) {
-    static br_vector3 smoothed;
-    static int valid;
+// Added by dethrace: the external camera is placed and aimed exactly where the original logic wants it, so
+// every bump, knock and spin of the car jerks the view. With CameraSmoothing, the camera moves towards that
+// position, and its aim towards the car, with that time constant; only avoiding walls and other cars (after
+// this) still sets it directly, and it eases back out from there
+static br_vector3 gEased_camera_pos;
+static br_vector3 gEased_camera_look;
+static int gEased_camera_valid;
+static tU32 gEased_camera_time;
+
+// pTarget: the wanted camera position, becomes the eased one; pLook: the eased point to aim at
+static int EaseCamera(br_vector3* pTarget, br_vector3* pCar_pos, br_vector3* pLook, br_scalar pDistance, tU32 pTime, int pSnap) {
     float tau = harness_game_config.camera_smoothing;
-    float angle;
+    tU32 now = GetTotalTime();
+    br_vector3 tv;
     float k;
 
-    if (tau <= 0.f || pFollow || pSnap || !valid || pTime >= 1000) {
-        BrVector3Copy(&smoothed, pDirection);
-        valid = tau > 0.f;
+    if (tau <= 0.f) {
+        gEased_camera_valid = 0;
+        return 0;
+    }
+    BrVector3Sub(&tv, pTarget, &gEased_camera_pos);
+    if (pSnap || !gEased_camera_valid || pTime >= 500 || now - gEased_camera_time > 250
+        || BrVector3LengthSquared(&tv) > 9.f * pDistance * pDistance) {
+        // (a reset, a recovery, back from the cockpit view or a pause)
+        BrVector3Copy(&gEased_camera_pos, pTarget);
+        BrVector3Copy(&gEased_camera_look, pCar_pos);
+    } else {
+        k = 1.f - expf(-(float)pTime / 1000.f / tau);
+        BrVector3Scale(&tv, &tv, k);
+        BrVector3Accumulate(&gEased_camera_pos, &tv);
+        BrVector3Sub(&tv, pCar_pos, &gEased_camera_look);
+        BrVector3Scale(&tv, &tv, k);
+        BrVector3Accumulate(&gEased_camera_look, &tv);
+    }
+    gEased_camera_valid = 1;
+    gEased_camera_time = now;
+    BrVector3Copy(pTarget, &gEased_camera_pos);
+    BrVector3Copy(pLook, &gEased_camera_look);
+    return 1;
+}
+
+// where the camera ended up (moved off walls and cars), to ease on from
+static void EasedCameraPlaced(br_vector3* pPos) {
+    BrVector3Copy(&gEased_camera_pos, pPos);
+}
+
+// PointCameraAtCar, at a point
+static void PointCameraAtPoint(br_matrix34* m2, br_vector3* pPos) {
+    br_vector3 vn;
+    br_vector3 tv2;
+    br_scalar dist;
+    br_angle theta;
+    br_camera* camera_ptr;
+
+    camera_ptr = gCamera->type_data;
+    BrVector3Sub(&vn, pPos, (br_vector3*)m2->m[3]);
+    vn.v[1] = 0.f;
+    if (BrVector3LengthSquared(&vn) < 1e-8f) {
         return;
     }
-    // the signed angle from the smoothed direction to the wanted one, in the ground plane
-    angle = atan2f(smoothed.v[2] * pDirection->v[0] - smoothed.v[0] * pDirection->v[2],
-        smoothed.v[0] * pDirection->v[0] + smoothed.v[2] * pDirection->v[2]);
-    if (fabsf(angle) > 2.6f) {
-        // turned right round (a recovery, or the view swapping ends): don't sweep through
-        BrVector3Copy(&smoothed, pDirection);
-        return;
-    }
-    k = 1.f - expf(-(float)pTime / 1000.f / tau);
-    angle *= 1.f - k;
-    // the wanted direction, turned back by what remains of the angle
-    smoothed.v[0] = pDirection->v[0] * cosf(angle) + pDirection->v[2] * sinf(angle);
-    smoothed.v[1] = 0.f;
-    smoothed.v[2] = pDirection->v[2] * cosf(angle) - pDirection->v[0] * sinf(angle);
-    BrVector3Normalise(&smoothed, &smoothed);
-    BrVector3Copy(pDirection, &smoothed);
+    BrVector3Normalise(&vn, &vn);
+    m2->m[0][0] = -vn.v[2];
+    m2->m[0][1] = 0.0f;
+    m2->m[0][2] = vn.v[0];
+    m2->m[1][0] = 0.0f;
+    m2->m[1][1] = 1.0f;
+    m2->m[1][2] = 0.0f;
+    m2->m[2][0] = -vn.v[0];
+    m2->m[2][1] = 0.0f;
+    m2->m[2][2] = -vn.v[2];
+    BrVector3Sub(&tv2, pPos, (br_vector3*)m2->m[3]);
+    dist = BrVector3Dot(&tv2, &vn);
+    theta = -BrRadianToAngle(atan2(m2->m[3][1] - pPos->v[1], dist)) + camera_ptr->field_of_view / 5;
+    BrMatrix34PreRotateX(m2, theta);
 }
 #endif
 
@@ -5660,6 +5702,10 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
     int manual_swing;
     int manual_zoom;
     br_vector3 old_camera_pos;
+#ifdef DETHRACE_FIX_BUGS
+    int eased;
+    br_vector3 eased_look;
+#endif
 
     m2 = &gCamera->t.t.mat;
     m1 = &c->car_master_actor->t.t.mat;
@@ -5693,16 +5739,9 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
                 gCamera_sign = 0;
             }
             SwingCamera(c, m1, m2, &vn, pTime);
-#ifdef DETHRACE_FIX_BUGS
-            // the original's own state keeps the direction it wants; only the camera is placed from the eased one
-            BrVector3Copy(&gView_direction, &vn);
-            SmoothCameraDirection(&vn, pTime, 0, manual_swing || manual_zoom || gCamera_reset || gCar_flying);
-#endif
             BrVector3Scale(&tv, &vn, dist);
             BrVector3Sub((br_vector3*)m2->m[3], &c->pos, &tv);
-#ifndef DETHRACE_FIX_BUGS
             BrVector3Copy(&gView_direction, &vn);
-#endif
         }
         if (gCamera_mode == 1) {
             if (manual_swing || manual_zoom) {
@@ -5716,9 +5755,6 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
             }
             BrVector3Normalise(&vn, &tv);
             BrVector3Copy(&gView_direction, &vn);
-#ifdef DETHRACE_FIX_BUGS
-            SmoothCameraDirection(&vn, pTime, 1, 0);
-#endif
             BrVector3Scale(&vn, &vn, -dist);
             BrVector3Accumulate(&tv, &vn);
             ts2 = BrVector3Length(&tv);
@@ -5757,12 +5793,21 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
 
         m2->m[3][1] = height_inc + gCamera_height;
         BrVector3Copy(&gCamera_pos_before_collide, (br_vector3*)m2->m[3]);
+#ifdef DETHRACE_FIX_BUGS
+        eased = EaseCamera((br_vector3*)m2->m[3], &c->pos, &eased_look, dist, pTime, swoop || gCamera_reset);
+#endif
         CollideCameraWithOtherCars(&c->pos, (br_vector3*)m2->m[3]);
         CollideCamera2(&c->pos, (br_vector3*)m2->m[3], &old_camera_pos, manual_swing || manual_zoom);
         if (gCamera_has_collided && swoop) {
             gCamera_height = c->pos.v[1];
         }
-        PointCameraAtCar(c, m1, m2);
+#ifdef DETHRACE_FIX_BUGS
+        if (eased) {
+            EasedCameraPlaced((br_vector3*)m2->m[3]);
+            PointCameraAtPoint(m2, &eased_look);
+        } else
+#endif
+            PointCameraAtCar(c, m1, m2);
     }
     gOld_yaw__car = gCamera_yaw;
     gOld_zoom = (br_angle)gCamera_zoom;

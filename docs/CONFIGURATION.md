@@ -99,8 +99,9 @@ PedestrianShadows = 0
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1
 
-; Only used in the external view. How softly (seconds) the camera follows the car's turns, so knocks and spins
-; swing the view instead of jerking it. 0 = rigidly, as the original. 0.2 is a gentle lag
+; Only used in the external view. The camera moves towards where it wants to be, and aims towards the car, with
+; this time constant (seconds), so bumps, knocks and spins don't jerk the view; it still jumps clear of walls
+; and other cars. 0 = rigidly, as the original. 0.08 is quick but smooth
 CameraSmoothing = 0
 
 ; Only used in 3dfx mode. 1 = vsync on, 0 = off, adaptive = vsync, but a frame that is late is shown
