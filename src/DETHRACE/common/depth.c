@@ -816,7 +816,15 @@ void DoDrugWobbleCamera(br_actor* pCamera) {
     // GLOBAL: CARM95 0x513490
     static br_scalar mag10 = 0.2f;
     // GLOBAL: CARM95 0x513494
+#ifdef DETHRACE_3DFX_PATCH
+        // Added by dethrace: the sky moves with the camera, so no surface shading (sun, variation) on it; and it
+        // leaves the depth alone, so the ambient occlusion doesn't shade the folds between its bands
+        Harness_Hook_DrawingSky(1);
+#endif
     static br_scalar mag11 = 0.07;
+#ifdef DETHRACE_3DFX_PATCH
+        Harness_Hook_DrawingSky(0);
+#endif
     // GLOBAL: CARM95 0x513498
     static br_scalar mag12 = 0.03f;
     // GLOBAL: CARM95 0x51349c

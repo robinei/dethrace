@@ -1018,7 +1018,20 @@ void Harness_Hook_SceneSurface(const float* sun, const float* up, int night) {
     scene_surface[7] = harness_game_config.gl_surface_variation;
 }
 
+static int drawing_sky;
+
+void Harness_Hook_DrawingSky(int sky) {
+    drawing_sky = sky;
+}
+
+int Harness_GL_DepthWrite(void) {
+    return !drawing_sky;
+}
+
 int Harness_GL_SceneSurface(float* params) {
+    if (drawing_sky) {
+        return 0;
+    }
     memcpy(params, scene_surface, sizeof(scene_surface));
     return scene_surface[3] > 0.f || scene_surface[7] > 0.f;
 }

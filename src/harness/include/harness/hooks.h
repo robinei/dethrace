@@ -167,6 +167,10 @@ int Harness_GL_SceneLighting(float* brightness, const float** lights);
 // surfaces (see glrend's scene_surface callback)
 void Harness_Hook_SceneSurface(const float* sun, const float* up, int night);
 int Harness_GL_SceneSurface(float* params);
+// While drawing the sky (which moves with the camera): no surface shading, and no depth written, so the
+// effects reading depth (ambient occlusion, depth of field) take it for infinitely far
+void Harness_Hook_DrawingSky(int sky);
+int Harness_GL_DepthWrite(void);
 float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indices, const short** rects, int* rect_count, int* id);
 float Harness_GL_GlowScale(int id);
 float Harness_GL_DistanceFade(void);
