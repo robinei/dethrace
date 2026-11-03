@@ -2069,7 +2069,7 @@ static void SetNightLighting(br_actor* pCamera) {
         // cast a little towards a fixed (world) direction, as by a high sun, so the sprite doesn't hide it all
         BrVector3Set(&d, 0.6f, 0.f, 0.8f);
         BrMatrix34ApplyV(&sun, &d, &to_camera);
-        peds = GetPedestrianFeet(pCamera, 30.f, feet, heights, MAX_SCENE_LIGHTS - count);
+        peds = GetPedestrianFeet(pCamera, 30.f, feet, heights, MIN(MAX_SCENE_LIGHTS - count, 16));
         for (i = 0; i < peds; i++) {
             // wider than the pedestrian is tall, with a dark middle softly fading out: seen at the usual low
             // angle it is a flat ellipse, a narrower one only shows as an outline either side of the feet
