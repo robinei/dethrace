@@ -268,4 +268,8 @@ void ReceivedPedestrian(tNet_contents* pContents, tNet_message* pMessage, tU32 p
 
 void SendAllPedestrianPositions(tPlayer_ID pPlayer);
 
+#ifdef DETHRACE_3DFX_PATCH
+int GetPedestrianFeet(br_actor* pCamera, br_scalar pMax_distance, br_vector3* pFeet, br_scalar* pSizes, int pMax);
+#endif
+
 #endif

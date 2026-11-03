@@ -334,6 +334,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gamepad_steering_speed = 60.f;
     harness_game_config.fov_scale = 1.f;
     harness_game_config.camera_smoothing = 0.f;
+    harness_game_config.gl_pedestrian_shadows = 0;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -580,6 +581,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         if (harness_game_config.fov_scale < 0.5f || harness_game_config.fov_scale > 2.5f) {
             harness_game_config.fov_scale = 1.f;
         }
+    } else if (MATCH("General", "PedestrianShadows")) {
+        harness_game_config.gl_pedestrian_shadows = (value[0] == '1');
     } else if (MATCH("General", "CameraSmoothing")) {
         harness_game_config.camera_smoothing = ClampConfigFloat(atof(value), 0.0f, 1.0f);
     } else if (MATCH("General", "Supersampling")) {
@@ -861,7 +864,7 @@ typedef struct br_gl_post_params {
     float shimmers[4 * 8];
 } br_gl_post_params;
 br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen, br_boolean glow);
-void BR_PUBLIC_ENTRY BrGLPostProcessDepthWrite(br_pixelmap* screen, br_boolean enabled);
+void BR_PUBLIC_ENTRY BrGLPostProcessDepthSnapshot(br_pixelmap* screen);
 static br_pixelmap* gPost_screen;
 void BR_PUBLIC_ENTRY BrGLPostProcessEnd(br_pixelmap* screen, const br_gl_post_params* params);
 
@@ -878,9 +881,9 @@ int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
     return 1;
 }
 
-void Harness_Hook_PostProcessDepthWrite(int enabled) {
-    if (gPost_screen != NULL) {
-        BrGLPostProcessDepthWrite(gPost_screen, enabled);
+void Harness_Hook_PostProcessDepthSnapshot(void) {
+    if (gPost_screen != NULL && harness_game_config.gl_ssao) {
+        BrGLPostProcessDepthSnapshot(gPost_screen);
     }
 }
 

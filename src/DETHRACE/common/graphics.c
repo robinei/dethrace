@@ -2052,6 +2052,33 @@ static void SetNightLighting(br_actor* pCamera) {
             count = AddSceneLight(lights, count, &pv, 7.f, NULL, 2.4f * flicker, 1.f, 0.55f, 0.2f, 0.f);
         }
     }
+    if (harness_game_config.gl_pedestrian_shadows) {
+        // soft blob shadows under the pedestrians: entries with a negative range, the radius, and the world's up
+        // (in the camera's space) for their direction; the shader darkens the ground under them
+        br_vector3 feet[MAX_SCENE_LIGHTS];
+        br_scalar heights[MAX_SCENE_LIGHTS];
+        br_vector3 up;
+        int peds;
+
+        br_vector3 sun;
+
+        BrActorToActorMatrix34(&to_camera, gUniverse_actor, pCamera);
+        BrVector3Set(&d, 0.f, 1.f, 0.f);
+        BrMatrix34ApplyV(&up, &d, &to_camera);
+        BrVector3Normalise(&up, &up);
+        // cast a little towards a fixed (world) direction, as by a high sun, so the sprite doesn't hide it all
+        BrVector3Set(&d, 0.6f, 0.f, 0.8f);
+        BrMatrix34ApplyV(&sun, &d, &to_camera);
+        peds = GetPedestrianFeet(pCamera, 30.f, feet, heights, MAX_SCENE_LIGHTS - count);
+        for (i = 0; i < peds; i++) {
+            // wider than the pedestrian is tall, with a dark middle softly fading out: seen at the usual low
+            // angle it is a flat ellipse, a narrower one only shows as an outline either side of the feet
+            t = MAX(heights[i] * 0.7f, 0.08f);
+            BrVector3Scale(&pv, &sun, t * 0.35f);
+            BrVector3Accumulate(&pv, &feet[i]);
+            count = AddSceneLight(lights, count, &pv, -t, &up, 0.6f, 0.f, 0.f, 0.f, 0.f);
+        }
+    }
     if (gNight) {
         Harness_Hook_SceneLighting(harness_game_config.gl_night_brightness, lights, count);
     } else {
@@ -2323,6 +2350,10 @@ void RenderAFrame(int pDepth_mask_on) {
 #endif
         ProcessNonTrackActors(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, &old_camera_matrix);
         ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 0);
+#ifdef DETHRACE_3DFX_PATCH
+        // Added by dethrace: ambient occlusion from the solid world only, not around the pedestrian sprites or smoke
+        Harness_Hook_PostProcessDepthSnapshot();
+#endif
         RenderLollipops();
 
 #ifdef DETHRACE_3DFX_PATCH
@@ -2333,17 +2364,9 @@ void RenderAFrame(int pDepth_mask_on) {
         if (!gAusterity_mode) {
             ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 1);
         }
-#ifdef DETHRACE_3DFX_PATCH
-        // Added by dethrace: the translucent things are drawn last; with post-processing they leave the depth
-        // to the surfaces behind them, so ambient occlusion doesn't shade around smoke puffs
-        Harness_Hook_PostProcessDepthWrite(0);
-#endif
         RenderSplashes();
         RenderSmoke(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
         RenderSparks(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
-#ifdef DETHRACE_3DFX_PATCH
-        Harness_Hook_PostProcessDepthWrite(1);
-#endif
         RenderProximityRays(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
         BrZbSceneRenderEnd();
 #ifdef DETHRACE_3DFX_PATCH

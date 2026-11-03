@@ -92,6 +92,7 @@ typedef struct tHarness_game_config {
     int supersampling;
     int texture_upscaler; /* 0 = none, 1 = MMPX 2x, 2 = xBR 2x */
     float fov_scale;
+    int gl_pedestrian_shadows;
     float camera_smoothing; /* seconds: how softly the external camera follows the car's turns, 0 = rigidly */
     int gamepad_rumble;
     int vsync; /* 1 = on, 0 = off, -1 = adaptive */

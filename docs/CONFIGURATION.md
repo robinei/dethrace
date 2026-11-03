@@ -86,6 +86,9 @@ LensFlare = 0
 HeatShimmer = 0
 ColourGrading = 0
 
+; Only used in 3dfx mode. Soft round shadows on the ground under the pedestrians nearby
+PedestrianShadows = 0
+
 ; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1
