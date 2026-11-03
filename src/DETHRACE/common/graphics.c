@@ -2066,9 +2066,9 @@ static void SetNightLighting(br_actor* pCamera) {
         BrVector3Normalise(&up, &up);
         peds = GetPedestrianFeet(pCamera, 30.f, feet, heights, MIN(MAX_SCENE_LIGHTS - count, 16));
         for (i = 0; i < peds; i++) {
-            // centred under the feet, a little wider than the pedestrian is tall, with a dark middle softly fading
-            t = MAX(heights[i] * 0.6f, 0.08f);
-            count = AddSceneLight(lights, count, &feet[i], -t, &up, 0.6f, 0.f, 0.f, 0.f, 0.f);
+            // centred under the feet, about as wide as the pedestrian is tall, with a darker middle softly fading
+            t = MAX(heights[i] * 0.5f, 0.07f);
+            count = AddSceneLight(lights, count, &feet[i], -t, &up, 0.45f, 0.f, 0.f, 0.f, 0.f);
         }
     }
     if (gNight) {
