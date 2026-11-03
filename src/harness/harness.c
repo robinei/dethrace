@@ -307,6 +307,9 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_dof_strength = 3.0f;
     harness_game_config.gl_glow = 0;
     harness_game_config.gl_glow_strength = 0.7f;
+    harness_game_config.gl_night = 0;
+    harness_game_config.gl_night_brightness = 0.3f;
+    harness_game_config.gl_headlight_strength = 2.0f;
     harness_game_config.draw_distance = 1.0f;
     harness_game_config.max_detail = 0;
     harness_game_config.msaa_samples = 4;
@@ -586,6 +589,12 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_dof_end = ClampConfigFloat(atof(value), 0.01f, 1.0f);
     } else if (MATCH("General", "DepthOfFieldStrength")) {
         harness_game_config.gl_dof_strength = ClampConfigFloat(atof(value), 0.0f, 20.0f);
+    } else if (MATCH("General", "Night")) {
+        harness_game_config.gl_night = (value[0] == '1');
+    } else if (MATCH("General", "NightBrightness")) {
+        harness_game_config.gl_night_brightness = ClampConfigFloat(atof(value), 0.0f, 1.0f);
+    } else if (MATCH("General", "HeadlightStrength")) {
+        harness_game_config.gl_headlight_strength = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "Glow")) {
         harness_game_config.gl_glow = (value[0] == '1');
     } else if (MATCH("General", "GlowStrength")) {
@@ -862,6 +871,29 @@ float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indic
     *rects = entry->rects;
     *rect_count = entry->rect_count;
     return entry->intensity;
+}
+
+static int scene_lighting_on;
+static float scene_lights[8 * BR_GL_MAX_SCENE_LIGHTS];
+static int scene_light_count;
+
+void Harness_Hook_SceneLighting(int on, const float* lights, int count) {
+    scene_lighting_on = on;
+    scene_light_count = 0;
+    if (on && lights != NULL && count > 0) {
+        scene_light_count = count < BR_GL_MAX_SCENE_LIGHTS ? count : BR_GL_MAX_SCENE_LIGHTS;
+        memcpy(scene_lights, lights, sizeof(float) * 8 * scene_light_count);
+    }
+}
+
+int Harness_GL_SceneLighting(float* brightness, const float** lights) {
+    *brightness = 1.0f;
+    *lights = scene_lights;
+    if (!scene_lighting_on || !harness_game_config.gl_night) {
+        return 0;
+    }
+    *brightness = harness_game_config.gl_night_brightness;
+    return scene_light_count;
 }
 
 static int distance_fade_on;

@@ -144,7 +144,12 @@ void Harness_Hook_DistanceFade(int on);
 int Harness_Hook_PostProcessBegin(br_pixelmap* screen);
 void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon);
 
+// Night (OpenGL mode): while on, the 3d scenes are darkened and lit by `count` spot lights (headlights) of
+// 8 floats: camera space position, range, camera space direction and strength
+void Harness_Hook_SceneLighting(int on, const float* lights, int count);
+
 // glrend callbacks
+int Harness_GL_SceneLighting(float* brightness, const float** lights);
 float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indices, const short** rects, int* rect_count);
 float Harness_GL_DistanceFade(void);
 int Harness_GL_OverlayRegions(const float** regions);

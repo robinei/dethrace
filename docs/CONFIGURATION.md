@@ -60,6 +60,12 @@ DepthOfFieldStrength = 3
 Glow = 0
 GlowStrength = 0.7
 
+; Only used in 3dfx mode. Night: everything is darkened to NightBrightness, except light sources (lit windows,
+; neon, lamps... from the glow table), and the cars' headlights light the road and whatever is ahead of them
+Night = 0
+NightBrightness = 0.3
+HeadlightStrength = 2
+
 ; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1

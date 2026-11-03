@@ -1884,6 +1884,12 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 #ifdef DETHRACE_3DFX_PATCH
     if (pPixelmap->type == BR_PMT_RGB_565) {
         bgnd_col = PaletteEntry16Bit(gRender_palette, bgnd_col);
+        if (harness_game_config.gl_night) {
+            // Added by dethrace: the background (where nothing is drawn) darkens with the night mode too
+            bgnd_col = ((int)(((bgnd_col >> 11) & 0x1f) * harness_game_config.gl_night_brightness) << 11)
+                | ((int)(((bgnd_col >> 5) & 0x3f) * harness_game_config.gl_night_brightness) << 5)
+                | (int)((bgnd_col & 0x1f) * harness_game_config.gl_night_brightness);
+        }
         // Added by dethrace: fill the widescreen areas outside the 4:3 2d layer too
         Harness_Hook_WidescreenFillBackground(pPixelmap, bgnd_col);
         bgnd_col = (bgnd_col << 16) | bgnd_col;
@@ -1897,6 +1903,73 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 #endif
     return 1;
 }
+
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: the cars' headlights for the night mode, as spot lights in the space of `pCamera`
+static void SetNightLighting(br_actor* pCamera) {
+    float lights[8 * 32];
+    int count;
+    int cat;
+    int car_count;
+    int i;
+    int side;
+    tCar_spec* car;
+    br_actor* actor;
+    br_bounds* b;
+    br_matrix34 to_camera;
+    br_vector3 p;
+    br_vector3 d;
+    br_vector3 pv;
+    br_vector3 dv;
+
+    count = 0;
+    if (!harness_game_config.gl_night) {
+        Harness_Hook_SceneLighting(0, NULL, 0);
+        return;
+    }
+    for (cat = eVehicle_self; cat <= eVehicle_rozzer; cat++) {
+        car_count = cat == eVehicle_self ? 1 : GetCarCount(cat);
+        for (i = 0; i < car_count && count + 2 <= COUNT_OF(lights) / 8; i++) {
+            car = cat == eVehicle_self ? &gProgram_state.current_car : GetCarSpec(cat, i);
+            if (car == NULL || car->knackered || car->current_car_actor < 0
+                || car->car_master_actor->render_style == BR_RSTYLE_NONE) {
+                continue;
+            }
+            actor = car->car_model_actors[car->current_car_actor].actor;
+            if (actor == NULL || actor->model == NULL) {
+                continue;
+            }
+            BrActorToActorMatrix34(&to_camera, actor, pCamera);
+            // too far away to light anything that can be seen (camera space z is negative ahead)
+            if (BrVector3LengthSquared((br_vector3*)to_camera.m[3]) > 70.f * 70.f) {
+                continue;
+            }
+            b = &actor->model->bounds;
+            for (side = -1; side <= 1; side += 2) {
+                // at the front corners (cars face -z), a little below half height, aimed slightly down
+                BrVector3Set(&p,
+                    (b->min.v[0] + b->max.v[0]) / 2.f + side * (b->max.v[0] - b->min.v[0]) * 0.33f,
+                    b->min.v[1] + (b->max.v[1] - b->min.v[1]) * 0.35f,
+                    b->min.v[2]);
+                BrVector3Set(&d, 0.f, -0.1f, -1.f);
+                BrMatrix34ApplyP(&pv, &p, &to_camera);
+                BrMatrix34ApplyV(&dv, &d, &to_camera);
+                BrVector3Normalise(&dv, &dv);
+                lights[8 * count + 0] = pv.v[0];
+                lights[8 * count + 1] = pv.v[1];
+                lights[8 * count + 2] = pv.v[2];
+                lights[8 * count + 3] = 9.f; // range, about 60m
+                lights[8 * count + 4] = dv.v[0];
+                lights[8 * count + 5] = dv.v[1];
+                lights[8 * count + 6] = dv.v[2];
+                lights[8 * count + 7] = harness_game_config.gl_headlight_strength;
+                count++;
+            }
+        }
+    }
+    Harness_Hook_SceneLighting(1, lights, count);
+}
+#endif
 
 // IDA: void __usercall RenderAFrame(int pDepth_mask_on@<EAX>)
 // FUNCTION: CARM95 0x004b59ce
@@ -2080,6 +2153,9 @@ void RenderAFrame(int pDepth_mask_on) {
 #ifdef DETHRACE_3DFX_PATCH
     // Added by dethrace: render the 3d view offscreen for post-processing effects (depth of field)
     post_processing = !gMap_mode && Harness_Hook_PostProcessBegin(gScreen);
+    if (!gMap_mode) {
+        SetNightLighting(gCamera);
+    }
     if (!ConditionallyFillWithSky(gRender_screen->width == gBack_screen->width ? gBack_screen : gRender_screen)
 #else
     if (!ConditionallyFillWithSky(gRender_screen)
@@ -2143,6 +2219,7 @@ void RenderAFrame(int pDepth_mask_on) {
 #endif
     }
 #ifdef DETHRACE_3DFX_PATCH
+    Harness_Hook_SceneLighting(0, NULL, 0);
     if (post_processing) {
         Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, ((br_camera*)gCamera->type_data)->yon_z);
     }
@@ -2201,6 +2278,9 @@ void RenderAFrame(int pDepth_mask_on) {
         BrPixelmapFlush(gBack_screen);
         // ---
 #endif
+#ifdef DETHRACE_3DFX_PATCH
+        SetNightLighting(gRearview_camera);
+#endif
         BrZbSceneRenderBegin(gUniverse_actor, gRearview_camera, gRearview_screen, gRearview_depth_buffer);
         ProcessNonTrackActors(
             gRearview_screen,
@@ -2222,6 +2302,7 @@ void RenderAFrame(int pDepth_mask_on) {
 #endif
         BrZbSceneRenderEnd();
 #ifdef DETHRACE_3DFX_PATCH
+        Harness_Hook_SceneLighting(0, NULL, 0);
         PDLockRealBackScreen(1);
 #endif
         gRearview_camera->t.t.mat = old_mirror_cam_matrix;
