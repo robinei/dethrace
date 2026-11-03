@@ -74,7 +74,7 @@ HeadlightHaze = 1
 ; SSAO: ambient occlusion, soft contact shadows where surfaces meet (under cars, at the foot of walls).
 ;   SSAOStrength 0-1, SSAORadius in world units
 ; SpeedBlur: a radial blur towards the edges of the view, fading in from 70 to 150 mph
-; LensFlare: light streaks and a faint lens ghost from the glowing lights (needs Glow), strength
+; LensFlare: light streaks through the glowing lights (needs Glow), strength
 ; HeatShimmer: hot air wobbling above burning cars
 ; ColourGrading: a gentle contrast curve and a little more saturation, cooler at night
 SSAO = 0
