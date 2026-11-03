@@ -1,5 +1,6 @@
 #include "trig.h"
 #include "brender.h"
+#include "constants.h"
 #include "harness/trace.h"
 #include <math.h>
 #include <stdlib.h>
@@ -183,23 +184,46 @@ br_scalar FastScalarTan(int pAngle_in_degrees) {
 // FUNCTION: CARM95 0x004aa2e2
 br_scalar FastScalarSinAngle(br_angle pBR_angle) {
 
+#ifdef DETHRACE_FIX_BUGS
+    // Added by dethrace: exact instead of a 1 degree lookup, so rotations driven by it (steered wheels,
+    // spinning and rocking objects, smoke) turn smoothly
+    return sinf(BrAngleToRadian(pBR_angle));
+#else
     return FastScalarSin(BrAngleToDegree(pBR_angle));
+#endif
 }
 
 // IDA: br_scalar __usercall FastScalarCosAngle@<ST0>(br_angle pBR_angle@<EAX>)
 // FUNCTION: CARM95 0x004aa317
 br_scalar FastScalarCosAngle(br_angle pBR_angle) {
 
+#ifdef DETHRACE_FIX_BUGS
+    return cosf(BrAngleToRadian(pBR_angle));
+#else
     return FastScalarCos(BrAngleToDegree(pBR_angle));
+#endif
 }
 
 // IDA: br_scalar __usercall FastScalarTanAngle@<ST0>(br_angle pBR_angle@<EAX>)
 br_scalar FastScalarTanAngle(br_angle pBR_angle) {
     int angle_in_degrees;
 
+#ifdef DETHRACE_FIX_BUGS
+    (void)angle_in_degrees;
+    return tanf(BrAngleToRadian(pBR_angle));
+#else
     angle_in_degrees = BrAngleToDegree(pBR_angle);
     return FastScalarSin(angle_in_degrees) / FastScalarCos(angle_in_degrees);
+#endif
 }
+
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace: for callers that pass fractional degrees to FastScalarSin, which truncates them
+br_scalar DRScalarSinDegrees(br_scalar pAngle_in_degrees) {
+
+    return sinf(pAngle_in_degrees * (float)(DR_PI / 180.0));
+}
+#endif
 
 // IDA: float __cdecl FastFloatArcSin(float pValue)
 float FastFloatArcSin(float pValue) {
@@ -251,6 +275,20 @@ float FastFloatArcTan2(float pY, float pX) {
     float abs_x;
     float abs_y;
 
+#ifdef DETHRACE_FIX_BUGS
+    // Added by dethrace: exact instead of a piecewise linear approximation (up to ~4 degrees off).
+    // Same range as the original: [0, 360) degrees.
+    {
+        float degrees = atan2f(pY, pX) * (float)(180.0 / DR_PI);
+        if (degrees < 0.f) {
+            degrees += 360.f;
+        }
+        if (degrees >= 360.f) {
+            degrees -= 360.f;
+        }
+        return degrees;
+    }
+#endif
     abs_x = fabs(pX);
     abs_y = fabs(pY);
     if (pX == 0.0f) {
@@ -307,6 +345,10 @@ br_angle FastFloatArcTan2Angle(float pY, float pX) {
     float abs_x;
     float abs_y;
 
+#ifdef DETHRACE_FIX_BUGS
+    // Added by dethrace: exact, see FastFloatArcTan2
+    return (br_angle)((int)floorf(atan2f(pY, pX) * (float)(32768.0 / DR_PI) + 0.5f) & 0xffff);
+#endif
     abs_x = fabs(pX);
     abs_y = fabs(pY);
     if (pX == 0.0f) {

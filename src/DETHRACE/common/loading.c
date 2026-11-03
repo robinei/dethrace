@@ -438,6 +438,9 @@ void LoadGeneralParameters(void) {
     gCamera_hither = GetAScalar(f);
     gCamera_hither *= HITHER_MULTIPLIER;
     gCamera_yon = GetAScalar(f);
+#ifdef DETHRACE_FIX_BUGS
+    gCamera_yon *= harness_game_config.draw_distance;
+#endif
     gCamera_angle = GetAScalar(f);
     gAmbient_adjustment = GetAScalar(f) / 100.0f;
     gDim_amount = GetAnInt(f);

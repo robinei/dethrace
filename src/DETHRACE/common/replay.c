@@ -476,6 +476,10 @@ void PollActionReplayControls(tU32 pFrame_period) {
     /* clang-format on */
 
     real_time = PDGetTotalTime();
+#ifdef DETHRACE_GAMEPAD
+    // Added by dethrace: map gamepad buttons to the action replay controls
+    PDGamepadSetContext(ePD_gamepad_context_replay);
+#endif
     old_replay_rate = gReplay_rate;
     old_key_down = gKey_down == KEY_CAPSLOCK ? -1 : gKey_down;
     gKey_down = PDAnyKeyDown();

@@ -435,6 +435,29 @@ void UpdateFramePeriod(tU32* pCamera_period) {
             *pCamera_period = gFrame_period;
         }
     } else {
+#ifdef DETHRACE_FIX_BUGS
+        // The original smooths the frame period and corrects the drift between game and real time (presumably for
+        // coarse timers). With an accurate timer at high frame rates the two fight each other: the period oscillates
+        // (eg. 3, 9, 3, 9ms), some frames advance the game by 0ms and the next by twice as much, and everything judders.
+        // The camera period was also clamped to at least 10ms, making the camera move too fast at high frame rates.
+        // Use the real time since the last frame instead, keeping the protection against long stalls.
+        new_tick_count = GetTotalTime();
+        gFrame_period = new_tick_count - gActual_last_tick_count;
+        if (gFrame_period > 500 && new_tick_count - gRace_start > 2000) {
+            gFrame_period = gAverage_frame_period / 10;
+            if (gNet_mode == eNet_mode_client) {
+                gProgram_state.current_car.last_car_car_collision = 0;
+            }
+        }
+        if (gFrame_period > 1000) {
+            gFrame_period = 1000;
+        }
+        gAverage_frame_period = 9 * gAverage_frame_period / 10 + gFrame_period;
+        gLast_tick_count = new_tick_count - gFrame_period;
+        *pCamera_period = gFrame_period > 0 ? gFrame_period : 1;
+        gActual_last_tick_count = new_tick_count;
+        return;
+#endif
         new_tick_count = GetTotalTime();
         gLast_tick_count += gFrame_period;
         error = new_tick_count - gLast_tick_count;

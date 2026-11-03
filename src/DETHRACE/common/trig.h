@@ -28,6 +28,14 @@ br_scalar FastScalarCosAngle(br_angle pBR_angle);
 
 br_scalar FastScalarTanAngle(br_angle pBR_angle);
 
+#ifdef DETHRACE_FIX_BUGS
+br_scalar DRScalarSinDegrees(br_scalar pAngle_in_degrees);
+// Added by dethrace: sine of fractional degrees; the original passes them to FastScalarSin, which truncates
+#define FRACTIONAL_DEGREES_SIN(X) DRScalarSinDegrees(X)
+#else
+#define FRACTIONAL_DEGREES_SIN(X) FastScalarSin(X)
+#endif
+
 float FastFloatArcSin(float pValue);
 
 float FastFloatArcCos(float pValue);

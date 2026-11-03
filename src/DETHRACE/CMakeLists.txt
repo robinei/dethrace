@@ -75,6 +75,10 @@ if(DETHRACE_FIX_BUGS)
     target_compile_definitions(dethrace PRIVATE DETHRACE_FIX_BUGS)
 endif()
 
+if(DETHRACE_GAMEPAD)
+    target_compile_definitions(dethrace PRIVATE DETHRACE_GAMEPAD)
+endif()
+
 if(DETHRACE_3DFX_PATCH)
     target_compile_definitions(dethrace PRIVATE DETHRACE_3DFX_PATCH)
 endif()

@@ -177,6 +177,21 @@ void PDEndItAllAndReRunTheBastard(void);
 
 void PDReadJoySticks(void);
 
+#ifdef DETHRACE_GAMEPAD
+// Added by dethrace: gamepad support
+typedef enum tPD_gamepad_context {
+    ePD_gamepad_context_menu,
+    ePD_gamepad_context_driving,
+    ePD_gamepad_context_replay,
+} tPD_gamepad_context;
+
+// Called every frame by the game loops that want gamepad buttons mapped for that context (menus are the default)
+void PDGamepadSetContext(tPD_gamepad_context pContext);
+
+// Analog controls, after deadzones. steering: -1..1, throttle/brake: 0..1. Returns 0 if no gamepad is connected
+int PDGamepadAnalog(float* pSteering, float* pThrottle, float* pBrake);
+#endif
+
 tS32 PDGetJoy1X(void);
 
 tS32 PDGetJoy1Y(void);

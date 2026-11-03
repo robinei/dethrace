@@ -9,6 +9,35 @@ typedef enum tHarness_window_type {
     eWindow_type_opengl = 1,
 } tHarness_window_type;
 
+// Gamepad buttons, in the same order as SDL's game controller buttons (Xbox layout)
+enum {
+    eGamepad_button_a = 1 << 0,
+    eGamepad_button_b = 1 << 1,
+    eGamepad_button_x = 1 << 2,
+    eGamepad_button_y = 1 << 3,
+    eGamepad_button_back = 1 << 4,
+    eGamepad_button_guide = 1 << 5,
+    eGamepad_button_start = 1 << 6,
+    eGamepad_button_left_stick = 1 << 7,
+    eGamepad_button_right_stick = 1 << 8,
+    eGamepad_button_left_shoulder = 1 << 9,
+    eGamepad_button_right_shoulder = 1 << 10,
+    eGamepad_button_dpad_up = 1 << 11,
+    eGamepad_button_dpad_down = 1 << 12,
+    eGamepad_button_dpad_left = 1 << 13,
+    eGamepad_button_dpad_right = 1 << 14,
+};
+
+typedef struct tHarness_gamepad_state {
+    int connected;
+    br_uint_32 buttons; // eGamepad_button_* bits
+    // sticks: -1..1, positive is right/down
+    float left_x, left_y;
+    float right_x, right_y;
+    // triggers: 0..1
+    float left_trigger, right_trigger;
+} tHarness_gamepad_state;
+
 // Platform implementation functions
 typedef struct tHarness_platform {
     // Render a fullscreen quad using the specified pixel data
@@ -46,6 +75,8 @@ typedef struct tHarness_platform {
     // If this platform supports OpenGL
     void* (*GL_GetProcAddress)(const char* name);
     void (*GetViewport)(int* x, int* y, float* width_multiplier, float* height_multiplier);
+    // Get the state of the first connected gamepad. Optional (may be NULL)
+    void (*GetGamepadState)(tHarness_gamepad_state* state);
 
 } tHarness_platform;
 
@@ -78,6 +109,13 @@ int Harness_Hook_isalnum(int c);
 
 // Scale things based on frame time, allowing us to run physics every frame
 int Harness_Hook_ScaleProbabilityWithDt(int min_inclusive, int max_inclusive, float dt_seconds);
+
+// Widescreen (OpenGL mode). Returns the factor to widen the camera aspect ratio by (1.0 if not extended).
+float Harness_Hook_WidescreenBeginView(br_pixelmap* back_screen, br_pixelmap* render_screen, int allow);
+void Harness_Hook_WidescreenEndView(void);
+void Harness_Hook_WidescreenFillBackground(br_pixelmap* pixelmap, br_uint_16 colour_565);
+// glrend `adjust_render_viewport` callback
+void Harness_GL_AdjustRenderViewport(br_pixelmap* target, int* x, int* y, int* width, int* height);
 int Harness_Hook_ScaleEmissionCountWithDt(float count, float dt_seconds);
 
 #endif

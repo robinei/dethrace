@@ -1,5 +1,6 @@
 #include "displays.h"
 #include "brender.h"
+#include "car.h"
 #include "constants.h"
 #include "controls.h"
 #include "depth.h"
@@ -1137,11 +1138,18 @@ void DoInstruments(tU32 pThe_time) {
     double sin_angle;
     double cos_angle;
     double speed_mph;
+    br_scalar revs; /* Added by dethrace. */
 
     if (gProgram_state.current_car_index != gProgram_state.current_car.index) {
         return;
     }
     speed_mph = gCar_to_view->speedo_speed * WORLD_SCALE / 1600.0 * 3600000.0;
+#ifdef DETHRACE_FIX_BUGS
+    // smooth between physics steps
+    revs = GetCarDisplayRevs(gCar_to_view);
+#else
+    revs = gCar_to_view->revs;
+#endif
         if (speed_mph < 0.0f) {
             speed_mph = 0.0f;
         }
@@ -1169,14 +1177,14 @@ void DoInstruments(tU32 pThe_time) {
                     gProgram_state.current_car.tacho_image[gProgram_state.cockpit_on],
                     0,
                     0,
-                    (((float)(gCar_to_view->revs - 1.0f)) / (double)gCar_to_view->red_line * (double)gProgram_state.current_car.tacho_image[gProgram_state.cockpit_on]->width + 1.0f),
+                    (((float)(revs - 1.0f)) / (double)gCar_to_view->red_line * (double)gProgram_state.current_car.tacho_image[gProgram_state.cockpit_on]->width + 1.0f),
                     gProgram_state.current_car.tacho_image[gProgram_state.cockpit_on]->height);
             }
         } else {
-            if (gCar_to_view->revs > gCar_to_view->red_line) {
+            if (revs > gCar_to_view->red_line) {
                 the_angle = DEG_TO_RAD((double)gProgram_state.current_car.tacho_end_angle[gProgram_state.cockpit_on]);
             } else {
-                the_angle = DEG_TO_RAD((double)(gProgram_state.current_car.tacho_end_angle[gProgram_state.cockpit_on] - gProgram_state.current_car.tacho_start_angle[gProgram_state.cockpit_on]) * gCar_to_view->revs / (double)gCar_to_view->red_line + (double)gProgram_state.current_car.tacho_start_angle[gProgram_state.cockpit_on]);
+                the_angle = DEG_TO_RAD((double)(gProgram_state.current_car.tacho_end_angle[gProgram_state.cockpit_on] - gProgram_state.current_car.tacho_start_angle[gProgram_state.cockpit_on]) * revs / (double)gCar_to_view->red_line + (double)gProgram_state.current_car.tacho_start_angle[gProgram_state.cockpit_on]);
             }
             if (the_angle < 0.0) {
                 the_angle += TAU;
@@ -1189,46 +1197,46 @@ void DoInstruments(tU32 pThe_time) {
             }
 #if defined(DETHRACE_FIX_BUGS)
             if (the_angle2 > DR_3PI_OVER_2) {
-                sin_angle = gCosine_array[(unsigned int)((TAU - the_angle2) / DR_PI * 128.0)];
+                sin_angle = gCosine_array[COSINE_INDEX((TAU - the_angle2) / DR_PI * 128.0)];
             } else if (the_angle2 > DR_PI) {
-                sin_angle = -gCosine_array[(unsigned int)((the_angle2 - DR_PI) / DR_PI * 128.0)];
+                sin_angle = -gCosine_array[COSINE_INDEX((the_angle2 - DR_PI) / DR_PI * 128.0)];
 #if defined(DETHRACE_FIX_BUGS)
             } else if (the_angle2 >= DR_PI_OVER_2) {
 #else
             } else if (the_angle2 > DR_PI_OVER_2) {
 #endif
-                sin_angle = -gCosine_array[(unsigned int)((DR_PI - the_angle2) / DR_PI * 128.0)];
+                sin_angle = -gCosine_array[COSINE_INDEX((DR_PI - the_angle2) / DR_PI * 128.0)];
             } else {
-                sin_angle = gCosine_array[(unsigned int)(the_angle2 / DR_PI * 128.0)];
+                sin_angle = gCosine_array[COSINE_INDEX(the_angle2 / DR_PI * 128.0)];
             }
             if (the_angle > DR_3PI_OVER_2) {
-                cos_angle = gCosine_array[(unsigned int)((TAU - the_angle) / DR_PI * 128.0)];
+                cos_angle = gCosine_array[COSINE_INDEX((TAU - the_angle) / DR_PI * 128.0)];
             } else if (the_angle > DR_PI) {
-                cos_angle = -gCosine_array[(unsigned int)((the_angle - DR_PI) / DR_PI * 128.0)];
+                cos_angle = -gCosine_array[COSINE_INDEX((the_angle - DR_PI) / DR_PI * 128.0)];
 #if defined(DETHRACE_FIX_BUGS)
             } else if (the_angle >= DR_PI_OVER_2) {
 #else
             } else if (the_angle > DR_PI_OVER_2) {
 #endif
-                cos_angle = -gCosine_array[(unsigned int)((DR_PI - the_angle) / DR_PI * 128.0)];
+                cos_angle = -gCosine_array[COSINE_INDEX((DR_PI - the_angle) / DR_PI * 128.0)];
             } else {
-                cos_angle = gCosine_array[(unsigned int)(the_angle / DR_PI * 128.0)];
+                cos_angle = gCosine_array[COSINE_INDEX(the_angle / DR_PI * 128.0)];
             }
 #else
             sin_angle = (double)(the_angle2 > DR_3PI_OVER_2
-                ? gCosine_array[(unsigned int)((TAU - the_angle2) / DR_PI * 128.0)]
+                ? gCosine_array[COSINE_INDEX((TAU - the_angle2) / DR_PI * 128.0)]
                 : (the_angle2 > DR_PI
-                    ? -gCosine_array[(unsigned int)((the_angle2 - DR_PI) / DR_PI * 128.0)]
+                    ? -gCosine_array[COSINE_INDEX((the_angle2 - DR_PI) / DR_PI * 128.0)]
                     : (the_angle2 > DR_PI / 2
-                        ? -gCosine_array[(unsigned int)((DR_PI - the_angle2) / DR_PI * 128.0)]
-                        : gCosine_array[(unsigned int)(the_angle2 / DR_PI * 128.0)])));
+                        ? -gCosine_array[COSINE_INDEX((DR_PI - the_angle2) / DR_PI * 128.0)]
+                        : gCosine_array[COSINE_INDEX(the_angle2 / DR_PI * 128.0)])));
             cos_angle = (double)(the_angle > DR_3PI_OVER_2
-                ? gCosine_array[(unsigned int)((TAU - the_angle) / DR_PI * 128.0)]
+                ? gCosine_array[COSINE_INDEX((TAU - the_angle) / DR_PI * 128.0)]
                 : (the_angle > DR_PI
-                    ? -gCosine_array[(unsigned int)((the_angle - DR_PI) / DR_PI * 128.0)]
+                    ? -gCosine_array[COSINE_INDEX((the_angle - DR_PI) / DR_PI * 128.0)]
                     : (the_angle > DR_PI / 2
-                        ? -gCosine_array[(unsigned int)((DR_PI - the_angle) / DR_PI * 128.0)]
-                        : gCosine_array[(unsigned int)(the_angle / DR_PI * 128.0)])));
+                        ? -gCosine_array[COSINE_INDEX((DR_PI - the_angle) / DR_PI * 128.0)]
+                        : gCosine_array[COSINE_INDEX(the_angle / DR_PI * 128.0)])));
 #endif
             if (tacho_image != NULL) {
                 DRPixelmapRectangleMaskedCopy(
@@ -1340,20 +1348,20 @@ void DoInstruments(tU32 pThe_time) {
                 the_angle2 += TAU;
             }
             sin_angle = (double)(the_angle2 > DR_3PI_OVER_2
-                ? gCosine_array[(unsigned int)((TAU - the_angle2) / DR_PI * 128.0)]
+                ? gCosine_array[COSINE_INDEX((TAU - the_angle2) / DR_PI * 128.0)]
                 : (the_angle2 > DR_PI
-                    ? -gCosine_array[(unsigned int)((the_angle2 - DR_PI) / DR_PI * 128.0)]
+                    ? -gCosine_array[COSINE_INDEX((the_angle2 - DR_PI) / DR_PI * 128.0)]
                     : (the_angle2 > DR_PI / 2
-                        ? -gCosine_array[(unsigned int)((DR_PI - the_angle2) / DR_PI * 128.0)]
-                        : gCosine_array[(unsigned int)(the_angle2 / DR_PI * 128.0)])));
+                        ? -gCosine_array[COSINE_INDEX((DR_PI - the_angle2) / DR_PI * 128.0)]
+                        : gCosine_array[COSINE_INDEX(the_angle2 / DR_PI * 128.0)])));
 
             cos_angle = (double)(the_angle > DR_3PI_OVER_2
-                ? gCosine_array[(unsigned int)((TAU - the_angle) / DR_PI * 128.0)]
+                ? gCosine_array[COSINE_INDEX((TAU - the_angle) / DR_PI * 128.0)]
                 : (the_angle > DR_PI
-                    ? -gCosine_array[(unsigned int)((the_angle - DR_PI) / DR_PI * 128.0)]
+                    ? -gCosine_array[COSINE_INDEX((the_angle - DR_PI) / DR_PI * 128.0)]
                     : (the_angle > DR_PI / 2
-                        ? -gCosine_array[(unsigned int)((DR_PI - the_angle) / DR_PI * 128.0)]
-                        : gCosine_array[(unsigned int)(the_angle / DR_PI * 128.0)])));
+                        ? -gCosine_array[COSINE_INDEX((DR_PI - the_angle) / DR_PI * 128.0)]
+                        : gCosine_array[COSINE_INDEX(the_angle / DR_PI * 128.0)])));
 
             PoshDrawLine(
                 the_angle,

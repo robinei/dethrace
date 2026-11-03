@@ -40,6 +40,16 @@
     X(GL_SetSwapInterval, int, (int))                                                   \
     X(GL_SwapWindow, void, (SDL_Window*))                                               \
     X(GetPrefPath, char*, (const char* org, const char* app))                           \
+    X(InitSubSystem, int, (Uint32))                                                     \
+    X(NumJoysticks, int, (void))                                                        \
+    X(IsGameController, SDL_bool, (int))                                                \
+    X(GameControllerOpen, SDL_GameController*, (int))                                   \
+    X(GameControllerClose, void, (SDL_GameController*))                                 \
+    X(GameControllerName, const char*, (SDL_GameController*))                           \
+    X(GameControllerGetButton, Uint8, (SDL_GameController*, SDL_GameControllerButton))  \
+    X(GameControllerGetAxis, Sint16, (SDL_GameController*, SDL_GameControllerAxis))     \
+    X(GameControllerGetJoystick, SDL_Joystick*, (SDL_GameController*))                  \
+    X(JoystickInstanceID, SDL_JoystickID, (SDL_Joystick*))                              \
     X(free, void, (void*))
 
 #endif /* sdl2_syms_h */

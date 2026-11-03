@@ -42,6 +42,14 @@ extern tSaved_table gSaved_shade_tables[100];
 extern tCursor_giblet gCursor_giblets[45];
 extern tTransient_bm gTransient_bitmaps[50];
 extern float gCosine_array[64];
+
+// Index into gCosine_array (a quarter cosine wave in 64 steps) from an angle mapped to [0, 64].
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace: floating point rounding at quarter-turn boundaries can produce index 64, one past the end
+#define COSINE_INDEX(X) ((unsigned int)(X) > 63 ? 63u : (unsigned int)(X))
+#else
+#define COSINE_INDEX(X) ((unsigned int)(X))
+#endif
 extern br_pixelmap* gCursors[8];
 extern br_pixelmap* gCursor_giblet_images[18];
 extern br_pixelmap* gEval_1;

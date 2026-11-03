@@ -18,6 +18,7 @@
 #include "sound.h"
 #include "utility.h"
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -240,6 +241,199 @@ int KeyDown22(int pKey_index) {
     return KeyDown(gScan_code[pKey_index][0]) || KeyDown(gScan_code[pKey_index][1]);
 }
 
+#ifdef DETHRACE_GAMEPAD
+// Added by dethrace: gamepad (Xbox layout) support.
+//
+// Buttons are injected into the key array, either as the key currently bound to a game action (while driving) or
+// as fixed keys (menus, action replay). The analog sticks and triggers drive the car through `PDGamepadAnalog`.
+
+#define GAMEPAD_STICK_DEADZONE 0.15f
+#define GAMEPAD_TRIGGER_DEADZONE 0.05f
+#define GAMEPAD_DIGITAL_THRESHOLD 0.5f
+// how long a context stays active after the game last reported it
+#define GAMEPAD_CONTEXT_TIMEOUT 150
+
+static tHarness_gamepad_state gGamepad;
+static tU32 gGamepad_context_time[3];
+static int gGamepad_looking;
+static tU32 gGamepad_look_forward_until;
+
+void PDGamepadSetContext(tPD_gamepad_context pContext) {
+    gGamepad_context_time[pContext] = PDGetTotalTime();
+}
+
+static int GamepadContextActive(tPD_gamepad_context pContext) {
+    return gGamepad_context_time[pContext] != 0 && PDGetTotalTime() - gGamepad_context_time[pContext] < GAMEPAD_CONTEXT_TIMEOUT;
+}
+
+static int GamepadButton(br_uint_32 pButton) {
+    return (gGamepad.buttons & pButton) != 0;
+}
+
+static void GamepadPressKey(int* pKeys, int pMark, int pKey) {
+    if (pKey < 0 || pKey >= COUNT_OF(gScan_code)) {
+        return;
+    }
+    pKeys[pKey] = pMark;
+    gKeys_pressed = pKey + (gKeys_pressed << 8) + 1;
+}
+
+static void GamepadPressAction(int* pKeys, int pMark, int pAction) {
+    GamepadPressKey(pKeys, pMark, gKey_mapping[pAction]);
+}
+
+static void GamepadDrivingKeys(int* pKeys, int pMark) {
+    static const struct {
+        br_uint_32 button;
+        int action;
+    } mapping[] = {
+        { eGamepad_button_a, 53 },                    // handbrake
+        { eGamepad_button_b, KEYMAP_REPAIR },         // repair (hold)
+        { eGamepad_button_x, KEYMAP_RECOVERY },       // recover car
+        { eGamepad_button_y, KEYMAP_COCKPIT },        // cockpit / external view
+        { eGamepad_button_left_shoulder, KEYMAP_REPLAYMODE },
+        { eGamepad_button_right_shoulder, 58 },       // horn
+        { eGamepad_button_back, KEYMAP_MAP },
+        { eGamepad_button_start, KEYMAP_ESCAPE },     // menu
+        { eGamepad_button_left_stick, KEYMAP_PRATCAM },
+        { eGamepad_button_right_stick, KEYMAP_MIRROR },
+        { eGamepad_button_dpad_up, KEYMAP_MOVE_UP },  // external camera
+        { eGamepad_button_dpad_down, KEYMAP_MOVE_DOWN },
+        { eGamepad_button_dpad_left, KEYMAP_MOVE_LEFT },
+        { eGamepad_button_dpad_right, KEYMAP_MOVE_RIGHT },
+    };
+    int i;
+
+    for (i = 0; i < COUNT_OF(mapping); i++) {
+        if (GamepadButton(mapping[i].button)) {
+            GamepadPressAction(pKeys, pMark, mapping[i].action);
+        }
+    }
+
+    // Right stick: hold left/right to look left/right, release to look forward again
+    if (gGamepad.right_x < -GAMEPAD_DIGITAL_THRESHOLD) {
+        GamepadPressAction(pKeys, pMark, KEYMAP_LOOK_LEFT);
+        gGamepad_looking = 1;
+    } else if (gGamepad.right_x > GAMEPAD_DIGITAL_THRESHOLD) {
+        GamepadPressAction(pKeys, pMark, KEYMAP_LOOK_RIGHT);
+        gGamepad_looking = 1;
+    } else if (gGamepad_looking) {
+        gGamepad_looking = 0;
+        gGamepad_look_forward_until = PDGetTotalTime() + 100;
+    }
+    if (gGamepad_look_forward_until != 0) {
+        if (PDGetTotalTime() < gGamepad_look_forward_until) {
+            GamepadPressAction(pKeys, pMark, KEYMAP_LOOK_FORWARD);
+        } else {
+            gGamepad_look_forward_until = 0;
+        }
+    }
+}
+
+static void GamepadReplayKeys(int* pKeys, int pMark) {
+    static const struct {
+        br_uint_32 button;
+        int key;
+    } mapping[] = {
+        { eGamepad_button_a, KEY_SPACE },         // pause / play
+        { eGamepad_button_x, KEY_BACKSPACE },     // reverse direction
+        { eGamepad_button_y, KEY_KP_MULTIPLY },   // change camera
+        { eGamepad_button_dpad_left, KEY_KP_1 },  // step back one frame
+        { eGamepad_button_dpad_right, KEY_KP_3 }, // step forward one frame
+        { eGamepad_button_dpad_up, KEY_HOME },    // go to start
+        { eGamepad_button_dpad_down, KEY_END },   // go to end
+    };
+    int i;
+
+    for (i = 0; i < COUNT_OF(mapping); i++) {
+        if (GamepadButton(mapping[i].button)) {
+            GamepadPressKey(pKeys, pMark, mapping[i].key);
+        }
+    }
+    // triggers: rewind / fast forward
+    if (gGamepad.left_trigger > GAMEPAD_DIGITAL_THRESHOLD) {
+        GamepadPressKey(pKeys, pMark, KEY_PAGEUP);
+    } else if (gGamepad.right_trigger > GAMEPAD_DIGITAL_THRESHOLD) {
+        GamepadPressKey(pKeys, pMark, KEY_PAGEDOWN);
+    }
+    // back to the race
+    if (GamepadButton(eGamepad_button_b) || GamepadButton(eGamepad_button_left_shoulder)) {
+        GamepadPressAction(pKeys, pMark, KEYMAP_REPLAYMODE);
+    }
+    if (GamepadButton(eGamepad_button_start)) {
+        GamepadPressAction(pKeys, pMark, KEYMAP_ESCAPE);
+    }
+}
+
+static void GamepadMenuKeys(int* pKeys, int pMark) {
+    if (GamepadButton(eGamepad_button_dpad_up) || gGamepad.left_y < -GAMEPAD_DIGITAL_THRESHOLD) {
+        GamepadPressKey(pKeys, pMark, KEY_UP);
+    }
+    if (GamepadButton(eGamepad_button_dpad_down) || gGamepad.left_y > GAMEPAD_DIGITAL_THRESHOLD) {
+        GamepadPressKey(pKeys, pMark, KEY_DOWN);
+    }
+    if (GamepadButton(eGamepad_button_dpad_left) || gGamepad.left_x < -GAMEPAD_DIGITAL_THRESHOLD) {
+        GamepadPressKey(pKeys, pMark, KEY_LEFT);
+    }
+    if (GamepadButton(eGamepad_button_dpad_right) || gGamepad.left_x > GAMEPAD_DIGITAL_THRESHOLD) {
+        GamepadPressKey(pKeys, pMark, KEY_RIGHT);
+    }
+    if (GamepadButton(eGamepad_button_a)) {
+        GamepadPressKey(pKeys, pMark, KEY_RETURN);
+    }
+    if (GamepadButton(eGamepad_button_b)) {
+        GamepadPressKey(pKeys, pMark, KEY_ESCAPE);
+    }
+    if (GamepadButton(eGamepad_button_x)) {
+        GamepadPressKey(pKeys, pMark, KEY_BACKSPACE);
+    }
+    if (GamepadButton(eGamepad_button_start)) {
+        // in a race, start closes the menu (like it opened it). Otherwise it confirms
+        GamepadPressKey(pKeys, pMark, gProgram_state.racing ? KEY_ESCAPE : KEY_RETURN);
+    }
+}
+
+static void GamepadSetKeyArray(int* pKeys, int pMark) {
+    if (gHarness_platform.GetGamepadState == NULL) {
+        return;
+    }
+    gHarness_platform.GetGamepadState(&gGamepad);
+    if (!gGamepad.connected) {
+        return;
+    }
+    if (GamepadContextActive(ePD_gamepad_context_driving)) {
+        GamepadDrivingKeys(pKeys, pMark);
+    } else if (GamepadContextActive(ePD_gamepad_context_replay)) {
+        GamepadReplayKeys(pKeys, pMark);
+    } else {
+        GamepadMenuKeys(pKeys, pMark);
+    }
+}
+
+static float GamepadApplyDeadzone(float pValue, float pDeadzone) {
+    float magnitude = fabsf(pValue);
+
+    if (magnitude <= pDeadzone) {
+        return 0.f;
+    }
+    magnitude = (magnitude - pDeadzone) / (1.f - pDeadzone);
+    if (magnitude > 1.f) {
+        magnitude = 1.f;
+    }
+    return pValue < 0.f ? -magnitude : magnitude;
+}
+
+int PDGamepadAnalog(float* pSteering, float* pThrottle, float* pBrake) {
+    if (!gGamepad.connected) {
+        return 0;
+    }
+    *pSteering = GamepadApplyDeadzone(gGamepad.left_x, GAMEPAD_STICK_DEADZONE);
+    *pThrottle = GamepadApplyDeadzone(gGamepad.right_trigger, GAMEPAD_TRIGGER_DEADZONE);
+    *pBrake = GamepadApplyDeadzone(gGamepad.left_trigger, GAMEPAD_TRIGGER_DEADZONE);
+    return 1;
+}
+#endif
+
 // IDA: void __usercall PDSetKeyArray(int *pKeys@<EAX>, int pMark@<EDX>)
 // FUNCTION: CARM95 0x004a7d4c
 void PDSetKeyArray(int* pKeys, int pMark) {
@@ -259,6 +453,9 @@ void PDSetKeyArray(int* pKeys, int pMark) {
             pKeys[i] = 0;
         }
     }
+#ifdef DETHRACE_GAMEPAD
+    GamepadSetKeyArray(pKeys, pMark);
+#endif
 }
 
 // FUNCTION: CARM95 0x004a7a49
@@ -408,6 +605,9 @@ void PDAllocateScreenAndBack(void) {
             gl_callbacks.get_proc_address = gHarness_platform.GL_GetProcAddress;
             gl_callbacks.swap_buffers = gHarness_platform.Swap;
             gl_callbacks.get_viewport = gHarness_platform.GetViewport;
+            gl_callbacks.adjust_render_viewport = Harness_GL_AdjustRenderViewport;
+            gl_callbacks.texture_upscaler = harness_game_config.texture_upscaler;
+            gl_callbacks.texture_sharp = harness_game_config.gl_sharp_filtering;
             gHarness_platform.CreateWindow_("Carmageddon", gGraf_specs[gGraf_spec_index].phys_width, gGraf_specs[gGraf_spec_index].phys_height, eWindow_type_opengl);
 
             BrDevBeginVar(&gScreen, "glrend",
@@ -426,7 +626,8 @@ void PDAllocateScreenAndBack(void) {
             dr_dprintf("Voodoo Rush mode");
             gVoodoo_rush_mode = 1;
         }
-        gInterpolate_textures = 1;
+        // dethrace: optionally keep the crisp software look in OpenGL mode
+        gInterpolate_textures = !harness_game_config.gl_nearest_filtering;
         gUse_mip_maps = 1;
         gTextures_need_powers_of_2 = 1;
         gMax_texture_aspect_ratio = 8;

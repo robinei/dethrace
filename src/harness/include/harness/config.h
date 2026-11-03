@@ -58,6 +58,20 @@ typedef struct tHarness_game_config {
     int opengl_3dfx_mode;
     int game_completed;
 
+    // OpenGL (3dfx emulation) mode: use nearest neighbour texture filtering instead of bilinear
+    int gl_nearest_filtering;
+    int gl_sharp_filtering;
+    // OpenGL (3dfx emulation) mode: extend the 3d view to fill widescreen displays
+    int gl_widescreen;
+
+    // Multiplier for the draw distance chosen in the game's options
+    float draw_distance;
+    // Always draw the track up to the full draw distance and use the most detailed car models
+    int max_detail;
+    int msaa_samples;
+    int supersampling;
+    int texture_upscaler; /* 0 = none, 1 = MMPX 2x, 2 = xBR 2x */
+
     int install_signalhandler;
     int no_bind;
     char network_adapter_name[256];

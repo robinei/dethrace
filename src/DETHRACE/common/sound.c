@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "brender.h"
+#include "car.h"
 #include "controls.h"
 #include "globvars.h"
 #include "graphics.h"
@@ -681,7 +682,12 @@ void MungeEngineNoise(void) {
                         if (the_car->last_special_volume) {
                             type_of_engine_noise = the_car->last_special_volume->engine_noise_index;
                         }
+#ifdef DETHRACE_FIX_BUGS
+                        // smooth between physics steps
+                        pitch = GetCarDisplayRevs(the_car) * 10.0 + 40960.0;
+#else
                         pitch = the_car->revs * 10.0 + 40960.0;
+#endif
                         if (gAction_replay_mode) {
                             pitch = fabs(GetReplayRate()) * pitch;
                         } else {
@@ -695,7 +701,11 @@ void MungeEngineNoise(void) {
                         pitch = MAX(pitch, 4096);
                         pitch = MIN(pitch, 131072);
 
+#ifdef DETHRACE_FIX_BUGS
+                        vol = GetCarDisplayRevs(the_car) * 0.001 + 64.0;
+#else
                         vol = the_car->revs * 0.001 + 64.0;
+#endif
                         if (type_of_engine_noise == kEngineNoise_EnclosedSpace) {
                             vol = vol * 5.0;
                         } else if (type_of_engine_noise == kEngineNoise_Underwater) {

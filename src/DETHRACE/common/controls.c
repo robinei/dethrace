@@ -1939,6 +1939,18 @@ void BrakeInstantly(void) {
     BrVector3Set(&gProgram_state.current_car.v, 0.f, 0.f, 0.f);
 }
 
+#ifdef DETHRACE_GAMEPAD
+// Added by dethrace: time (ms) for the gamepad steering to go from straight ahead to full lock, and back
+#define GAMEPAD_STEER_TIME_TO_FULL_LOCK 150.f
+#define GAMEPAD_STEER_TIME_TO_CENTRE 100.f
+// steering lock = stick ^ GAMEPAD_STEER_EXPONENT. Higher is less sensitive near the centre
+#define GAMEPAD_STEER_EXPONENT 2.5f
+// Speed sensitive steering: the available lock is 1 / (1 + (speed / GAMEPAD_STEER_SPEED_MPH) ^ 1.5),
+// ie. full lock when stopped, half lock at GAMEPAD_STEER_SPEED_MPH. Note the game also gives the rear tyres less
+// grip (for sliding) above 25% lock, like when holding a steering key
+#define GAMEPAD_STEER_SPEED_MPH 60.f
+#endif
+
 // IDA: void __usercall PollCarControls(tU32 pTime_difference@<EAX>)
 // FUNCTION: CARM95 0x004a3d80
 void PollCarControls(tU32 pTime_difference) {
@@ -1950,6 +1962,17 @@ void PollCarControls(tU32 pTime_difference) {
     tCar_controls keys;
     tJoystick joystick;
     tCar_spec* c;
+#ifdef DETHRACE_GAMEPAD
+    static int gGamepad_steering = 0;
+    // current steering lock from the gamepad (-1..1)
+    static float gGamepad_lock = 0.f;
+    float pad_lock;
+    float max_change;
+    float speed_mph;
+    float pad_steering;
+    float pad_throttle;
+    float pad_brake;
+#endif
 
     decay_steering = 1;
     decay_speed = 1;
@@ -2032,6 +2055,49 @@ void PollCarControls(tU32 pTime_difference) {
                 keys.horn = 1;
             }
         }
+#ifdef DETHRACE_GAMEPAD
+        // Added by dethrace: analog gamepad controls. Left stick steers, right trigger accelerates,
+        // left trigger brakes (and reverses when stopped, like the keyboard controls)
+        PDGamepadSetContext(ePD_gamepad_context_driving);
+        if (PDGamepadAnalog(&pad_steering, &pad_throttle, &pad_brake)) {
+            // the stick takes over steering when moved, and hands it back to the keyboard when a steering key is used
+            if (keys.left || keys.right) {
+                gGamepad_steering = 0;
+                gGamepad_lock = 0.f;
+            } else if (pad_steering != 0.f) {
+                gGamepad_steering = 1;
+            }
+            if (gGamepad_steering && joystick.left < 0 && joystick.right < 0) {
+                // Move the lock towards the stick position at a limited rate (like the keyboard controls),
+                // rather than snapping to it. The game squares the joystick value to get the lock, so pass sqrt(lock)
+                pad_lock = pad_steering < 0.f ? -powf(-pad_steering, GAMEPAD_STEER_EXPONENT) : powf(pad_steering, GAMEPAD_STEER_EXPONENT);
+                speed_mph = fabsf(c->speedo_speed) * WORLD_SCALE / 1600.f * 3600000.f;
+                pad_lock /= 1.f + powf(speed_mph / GAMEPAD_STEER_SPEED_MPH, 1.5f);
+                if (pad_lock * gGamepad_lock >= 0.f && fabsf(pad_lock) > fabsf(gGamepad_lock)) {
+                    max_change = pTime_difference / GAMEPAD_STEER_TIME_TO_FULL_LOCK;
+                } else {
+                    max_change = pTime_difference / GAMEPAD_STEER_TIME_TO_CENTRE;
+                }
+                if (pad_lock > gGamepad_lock + max_change) {
+                    gGamepad_lock += max_change;
+                } else if (pad_lock < gGamepad_lock - max_change) {
+                    gGamepad_lock -= max_change;
+                } else {
+                    gGamepad_lock = pad_lock;
+                }
+                joystick.left = gGamepad_lock < 0.f ? (tS32)(sqrtf(-gGamepad_lock) * 65535.f) : 0;
+                joystick.right = gGamepad_lock > 0.f ? (tS32)(sqrtf(gGamepad_lock) * 65535.f) : 0;
+            }
+            if (!gRace_finished && !gProgram_state.current_car.knackered && !gWait_for_it) {
+                if (pad_throttle > 0.f && !keys.acc && joystick.acc < 0) {
+                    joystick.acc = (tS32)(pad_throttle * 65535.f);
+                }
+                if (pad_brake > 0.f && !keys.dec && joystick.dec < 0) {
+                    joystick.dec = (tS32)(pad_brake * 65535.f);
+                }
+            }
+        }
+#endif
         c->keys = keys;
         c->joystick = joystick;
     }

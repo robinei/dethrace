@@ -1111,13 +1111,13 @@ void CalculateWobblitude(tU32 pThe_time) {
             } else {
                 mod_angle = fmod(time_going / gWobble_array[i].period, TAU);
                 if (mod_angle > DR_3PI_OVER_2) {
-                    cosine_over_angle = gCosine_array[(unsigned int)((TAU - mod_angle) / DR_PI * 128.0)];
+                    cosine_over_angle = gCosine_array[COSINE_INDEX((TAU - mod_angle) / DR_PI * 128.0)];
                 } else if (mod_angle > DR_PI) {
-                    cosine_over_angle = -gCosine_array[(unsigned int)((mod_angle - DR_PI) / DR_PI * 128.0)];
+                    cosine_over_angle = -gCosine_array[COSINE_INDEX((mod_angle - DR_PI) / DR_PI * 128.0)];
                 } else if (mod_angle > DR_PI_OVER_2) {
-                    cosine_over_angle = -gCosine_array[(unsigned int)((DR_PI - mod_angle) / DR_PI * 128.0)];
+                    cosine_over_angle = -gCosine_array[COSINE_INDEX((DR_PI - mod_angle) / DR_PI * 128.0)];
                 } else {
-                    cosine_over_angle = gCosine_array[(unsigned int)(mod_angle / DR_PI * 128.0)];
+                    cosine_over_angle = gCosine_array[COSINE_INDEX(mod_angle / DR_PI * 128.0)];
                 }
                 angle = cosine_over_angle / ((double)(pThe_time - gWobble_array[i].time_started) * 0.0035f + 1.0f);
                 gScreen_wobble_x = (gWobble_array[i].amplitude_x * angle + gScreen_wobble_x);
@@ -1162,13 +1162,13 @@ void CalculateConcussion(tU32 pThe_time) {
                 if (the_amplitude != 0.0) {
                     mod_angle = fmod(time_difference / gConcussion.periods.m[i][j], TAU);
                     if (mod_angle > DR_3PI_OVER_2) {
-                        cosine_over_angle = gCosine_array[(unsigned int)((TAU - mod_angle) / DR_PI * 128.f)];
+                        cosine_over_angle = gCosine_array[COSINE_INDEX((TAU - mod_angle) / DR_PI * 128.f)];
                     } else if (mod_angle > DR_PI) {
-                        cosine_over_angle = -gCosine_array[(unsigned int)((mod_angle - DR_PI) / DR_PI * 128.f)];
+                        cosine_over_angle = -gCosine_array[COSINE_INDEX((mod_angle - DR_PI) / DR_PI * 128.f)];
                     } else if (mod_angle > DR_PI_OVER_2) {
-                        cosine_over_angle = -gCosine_array[(unsigned int)((DR_PI - mod_angle) / DR_PI * 128.f)];
+                        cosine_over_angle = -gCosine_array[COSINE_INDEX((DR_PI - mod_angle) / DR_PI * 128.f)];
                     } else {
-                        cosine_over_angle = gCosine_array[(unsigned int)(mod_angle / DR_PI * 128.f)];
+                        cosine_over_angle = gCosine_array[COSINE_INDEX(mod_angle / DR_PI * 128.f)];
                     }
                     angle = cosine_over_angle / ((double)time_difference * 0.02f + 1.0f);
                     gCamera->t.t.mat.m[i][j] = angle * the_amplitude + gCamera->t.t.mat.m[i][j];
@@ -1878,6 +1878,8 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 #ifdef DETHRACE_3DFX_PATCH
     if (pPixelmap->type == BR_PMT_RGB_565) {
         bgnd_col = PaletteEntry16Bit(gRender_palette, bgnd_col);
+        // Added by dethrace: fill the widescreen areas outside the 4:3 2d layer too
+        Harness_Hook_WidescreenFillBackground(pPixelmap, bgnd_col);
         bgnd_col = (bgnd_col << 16) | bgnd_col;
     }
 #endif
@@ -1915,6 +1917,10 @@ void RenderAFrame(int pDepth_mask_on) {
     br_vector3 pos;
     char the_text[256];
     tCar_spec* car;
+#ifdef DETHRACE_3DFX_PATCH
+    float widescreen_factor;
+    br_scalar old_aspect;
+#endif
 
 #ifdef DETHRACE_FIX_BUGS
     real_origin_x = 0;
@@ -2050,6 +2056,13 @@ void RenderAFrame(int pDepth_mask_on) {
     DoSpecialCameraEffect(gCamera, &gCamera_to_world);
 
 #ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: extend the 3d view to fill a widescreen window (OpenGL mode only)
+    widescreen_factor = Harness_Hook_WidescreenBeginView(gBack_screen, gRender_screen, !cockpit_on && !gMap_mode);
+    old_aspect = ((br_camera*)gCamera->type_data)->aspect;
+    ((br_camera*)gCamera->type_data)->aspect *= widescreen_factor;
+#endif
+
+#ifdef DETHRACE_3DFX_PATCH
     if (!ConditionallyFillWithSky(gRender_screen->width == gBack_screen->width ? gBack_screen : gRender_screen)
 #else
     if (!ConditionallyFillWithSky(gRender_screen)
@@ -2098,6 +2111,10 @@ void RenderAFrame(int pDepth_mask_on) {
     }
 #ifdef DETHRACE_3DFX_PATCH
     PDLockRealBackScreen(1);
+
+    // Added by dethrace
+    ((br_camera*)gCamera->type_data)->aspect = old_aspect;
+    Harness_Hook_WidescreenEndView();
 #endif
 
     gCamera->t.t.mat = old_camera_matrix;

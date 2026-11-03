@@ -7,6 +7,7 @@
 #include "globvrbm.h"
 #include "globvrkm.h"
 #include "globvrpb.h"
+#include "harness/config.h"
 #include "harness/hooks.h"
 #include "harness/trace.h"
 #include "init.h"
@@ -101,6 +102,9 @@ br_pixelmap* gSwap_sky_texture;
 
 // GLOBAL: CARM95 0x00537928
 br_angle gOld_fov;
+#ifdef DETHRACE_3DFX_PATCH
+static br_scalar gOld_aspect;
+#endif
 
 // GLOBAL: CARM95 0x00550a6e
 br_angle gSky_image_width;
@@ -645,7 +649,13 @@ void DoHorizon(br_pixelmap* pRender_buffer, br_pixelmap* pDepth_buffer, br_actor
             actor = gRearview_sky_actor;
         } else {
             actor = gForward_sky_actor;
+#ifdef DETHRACE_3DFX_PATCH
+            // Added by dethrace: the sky model also depends on the aspect ratio, which changes with widescreen
+            if (ACTOR_CAMERA(gCamera)->field_of_view != gOld_fov || ACTOR_CAMERA(gCamera)->yon_z != gOld_yon || ACTOR_CAMERA(gCamera)->aspect != gOld_aspect) {
+                gOld_aspect = ACTOR_CAMERA(gCamera)->aspect;
+#else
             if (ACTOR_CAMERA(gCamera)->field_of_view != gOld_fov || ACTOR_CAMERA(gCamera)->yon_z != gOld_yon) {
+#endif
                 gOld_fov = ACTOR_CAMERA(gCamera)->field_of_view;
                 gOld_yon = ACTOR_CAMERA(gCamera)->yon_z;
                 MungeSkyModel(gCamera, gForward_sky_model);
@@ -761,15 +771,15 @@ void DoWobbleCamera(br_actor* pCamera) {
     static float period22 = 3900.f;
 
     f_time = (float)PDGetTotalTime();
-    pCamera->t.t.mat.m[0][0] += FastScalarSin(fmod(f_time / period00 * 360.f, 360.f)) * mag00;
-    pCamera->t.t.mat.m[0][1] += FastScalarSin(fmod(f_time / period01 * 360.f, 360.f)) * mag01;
-    pCamera->t.t.mat.m[0][2] += FastScalarSin(fmod(f_time / period02 * 360.f, 360.f)) * mag02;
-    pCamera->t.t.mat.m[1][0] += FastScalarSin(fmod(f_time / period10 * 360.f, 360.f)) * mag10;
-    pCamera->t.t.mat.m[1][1] += FastScalarSin(fmod(f_time / period11 * 360.f, 360.f)) * mag11;
-    pCamera->t.t.mat.m[1][2] += FastScalarSin(fmod(f_time / period12 * 360.f, 360.f)) * mag12;
-    pCamera->t.t.mat.m[2][0] += FastScalarSin(fmod(f_time / period20 * 360.f, 360.f)) * mag20;
-    pCamera->t.t.mat.m[2][1] += FastScalarSin(fmod(f_time / period21 * 360.f, 360.f)) * mag21;
-    pCamera->t.t.mat.m[2][2] += FastScalarSin(fmod(f_time / period22 * 360.f, 360.f)) * mag22;
+    pCamera->t.t.mat.m[0][0] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period00 * 360.f, 360.f)) * mag00;
+    pCamera->t.t.mat.m[0][1] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period01 * 360.f, 360.f)) * mag01;
+    pCamera->t.t.mat.m[0][2] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period02 * 360.f, 360.f)) * mag02;
+    pCamera->t.t.mat.m[1][0] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period10 * 360.f, 360.f)) * mag10;
+    pCamera->t.t.mat.m[1][1] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period11 * 360.f, 360.f)) * mag11;
+    pCamera->t.t.mat.m[1][2] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period12 * 360.f, 360.f)) * mag12;
+    pCamera->t.t.mat.m[2][0] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period20 * 360.f, 360.f)) * mag20;
+    pCamera->t.t.mat.m[2][1] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period21 * 360.f, 360.f)) * mag21;
+    pCamera->t.t.mat.m[2][2] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period22 * 360.f, 360.f)) * mag22;
 }
 
 // IDA: void __usercall DoDrugWobbleCamera(br_actor *pCamera@<EAX>)
@@ -814,15 +824,15 @@ void DoDrugWobbleCamera(br_actor* pCamera) {
     static float period22 = 300.f;
 
     f_time = (float)PDGetTotalTime();
-    pCamera->t.t.mat.m[0][0] += FastScalarSin(fmod(f_time / period00 * 360.f, 360.f)) * mag00;
-    pCamera->t.t.mat.m[0][1] += FastScalarSin(fmod(f_time / period01 * 360.f, 360.f)) * mag01;
-    pCamera->t.t.mat.m[0][2] += FastScalarSin(fmod(f_time / period02 * 360.f, 360.f)) * mag02;
-    pCamera->t.t.mat.m[1][0] += FastScalarSin(fmod(f_time / period10 * 360.f, 360.f)) * mag10;
-    pCamera->t.t.mat.m[1][1] += FastScalarSin(fmod(f_time / period11 * 360.f, 360.f)) * mag11;
-    pCamera->t.t.mat.m[1][2] += FastScalarSin(fmod(f_time / period12 * 360.f, 360.f)) * mag12;
-    pCamera->t.t.mat.m[2][0] += FastScalarSin(fmod(f_time / period20 * 360.f, 360.f)) * mag20;
-    pCamera->t.t.mat.m[2][1] += FastScalarSin(fmod(f_time / period21 * 360.f, 360.f)) * mag21;
-    pCamera->t.t.mat.m[2][2] += FastScalarSin(fmod(f_time / period22 * 360.f, 360.f)) * mag22;
+    pCamera->t.t.mat.m[0][0] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period00 * 360.f, 360.f)) * mag00;
+    pCamera->t.t.mat.m[0][1] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period01 * 360.f, 360.f)) * mag01;
+    pCamera->t.t.mat.m[0][2] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period02 * 360.f, 360.f)) * mag02;
+    pCamera->t.t.mat.m[1][0] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period10 * 360.f, 360.f)) * mag10;
+    pCamera->t.t.mat.m[1][1] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period11 * 360.f, 360.f)) * mag11;
+    pCamera->t.t.mat.m[1][2] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period12 * 360.f, 360.f)) * mag12;
+    pCamera->t.t.mat.m[2][0] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period20 * 360.f, 360.f)) * mag20;
+    pCamera->t.t.mat.m[2][1] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period21 * 360.f, 360.f)) * mag21;
+    pCamera->t.t.mat.m[2][2] += FRACTIONAL_DEGREES_SIN(fmod(f_time / period22 * 360.f, 360.f)) * mag22;
 }
 
 // IDA: void __usercall DoSpecialCameraEffect(br_actor *pCamera@<EAX>, br_matrix34 *pCamera_to_world@<EDX>)
@@ -946,6 +956,11 @@ void SetYon(br_scalar pYon) {
     if (pYon < 5.0f) {
         pYon = 5.0f;
     }
+#ifdef DETHRACE_FIX_BUGS
+    // Added by dethrace: optionally extend the draw distance. `GetYon` still returns the unscaled value,
+    // so the options screen and OPTIONS.TXT are unaffected
+    pYon *= harness_game_config.draw_distance;
+#endif
 
     for (i = 0; i < BR_ASIZE(gCamera_list); i++) {
         if (gCamera_list[i]) {
@@ -960,7 +975,11 @@ void SetYon(br_scalar pYon) {
 // FUNCTION: CARM95 0x004637f0
 br_scalar GetYon(void) {
 
+#ifdef DETHRACE_FIX_BUGS
+    return gCamera_yon / harness_game_config.draw_distance;
+#else
     return gCamera_yon;
+#endif
 }
 
 // IDA: void __cdecl IncreaseAngle()

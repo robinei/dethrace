@@ -1,4 +1,5 @@
 #include <SDL.h>
+#include <string.h>
 
 #include "harness.h"
 #include "harness/config.h"
@@ -22,6 +23,7 @@ static int render_width, render_height;
 static Uint32 last_frame_time;
 
 static void (*gKeyHandler_func)(void);
+static SDL_GameController* game_controller;
 
 // 32 bytes, 1 bit per key. Matches dos executable behavior
 static br_uint_32 key_state[8];
@@ -126,6 +128,20 @@ static int is_only_key_modifier(int modifier_flags, int flag_check) {
     return (modifier_flags & flag_check) && (modifier_flags & (KMOD_CTRL | KMOD_SHIFT | KMOD_ALT | KMOD_GUI)) == (modifier_flags & flag_check);
 }
 
+static void open_first_game_controller(void) {
+    int i;
+
+    for (i = 0; i < SDL2_NumJoysticks(); i++) {
+        if (SDL2_IsGameController(i)) {
+            game_controller = SDL2_GameControllerOpen(i);
+            if (game_controller != NULL) {
+                LOG_INFO2("Using game controller \"%s\"", SDL2_GameControllerName(game_controller));
+                return;
+            }
+        }
+    }
+}
+
 static void SDL2_Harness_ProcessWindowMessages(void) {
     SDL_Event event;
 
@@ -170,10 +186,48 @@ static void SDL2_Harness_ProcessWindowMessages(void) {
             }
             break;
 
+        case SDL_CONTROLLERDEVICEADDED:
+            if (game_controller == NULL) {
+                open_first_game_controller();
+            }
+            break;
+        case SDL_CONTROLLERDEVICEREMOVED:
+            if (game_controller != NULL && event.cdevice.which == SDL2_JoystickInstanceID(SDL2_GameControllerGetJoystick(game_controller))) {
+                SDL2_GameControllerClose(game_controller);
+                game_controller = NULL;
+                open_first_game_controller();
+            }
+            break;
         case SDL_QUIT:
             QuitGame();
         }
     }
+}
+
+static float controller_axis(SDL_GameControllerAxis axis) {
+    Sint16 value = SDL2_GameControllerGetAxis(game_controller, axis);
+    return value < 0 ? value / 32768.0f : value / 32767.0f;
+}
+
+static void SDL2_Harness_GetGamepadState(tHarness_gamepad_state* state) {
+    int i;
+
+    memset(state, 0, sizeof(*state));
+    if (game_controller == NULL) {
+        return;
+    }
+    state->connected = 1;
+    for (i = SDL_CONTROLLER_BUTTON_A; i <= SDL_CONTROLLER_BUTTON_DPAD_RIGHT; i++) {
+        if (SDL2_GameControllerGetButton(game_controller, (SDL_GameControllerButton)i)) {
+            state->buttons |= 1u << i;
+        }
+    }
+    state->left_x = controller_axis(SDL_CONTROLLER_AXIS_LEFTX);
+    state->left_y = controller_axis(SDL_CONTROLLER_AXIS_LEFTY);
+    state->right_x = controller_axis(SDL_CONTROLLER_AXIS_RIGHTX);
+    state->right_y = controller_axis(SDL_CONTROLLER_AXIS_RIGHTY);
+    state->left_trigger = controller_axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT);
+    state->right_trigger = controller_axis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
 }
 
 static void SDL2_Harness_SetKeyHandler(void (*handler_func)(void)) {
@@ -241,6 +295,44 @@ static int SDL2_Harness_ShowErrorMessage(char* title, char* message) {
     return 0;
 }
 
+// Supersampling: shade every sample of the multisampled framebuffer instead of once per pixel
+// (GL 4.0 / ARB_sample_shading). Textures and colour-keyed edges are then anti-aliased too.
+static void enable_sample_shading(void) {
+    typedef void (*get_integerv_t)(unsigned, int*);
+    typedef const unsigned char* (*get_stringi_t)(unsigned, unsigned);
+    typedef void (*min_sample_shading_t)(float);
+    typedef void (*enable_t)(unsigned);
+    get_integerv_t get_integerv = (get_integerv_t)SDL2_GL_GetProcAddress("glGetIntegerv");
+    get_stringi_t get_stringi = (get_stringi_t)SDL2_GL_GetProcAddress("glGetStringi");
+    enable_t enable = (enable_t)SDL2_GL_GetProcAddress("glEnable");
+    min_sample_shading_t min_sample_shading = NULL;
+    int major = 0, sample_buffers = 0, extensions = 0, i;
+
+    get_integerv(0x80A8 /* GL_SAMPLE_BUFFERS */, &sample_buffers);
+    if (!sample_buffers) {
+        LOG_WARN("Supersampling needs MSAA to be enabled");
+        return;
+    }
+    get_integerv(0x821B /* GL_MAJOR_VERSION */, &major);
+    if (major >= 4) {
+        min_sample_shading = (min_sample_shading_t)SDL2_GL_GetProcAddress("glMinSampleShading");
+    } else if (get_stringi != NULL) {
+        get_integerv(0x821D /* GL_NUM_EXTENSIONS */, &extensions);
+        for (i = 0; i < extensions; i++) {
+            if (strcmp((const char*)get_stringi(0x1F03 /* GL_EXTENSIONS */, i), "GL_ARB_sample_shading") == 0) {
+                min_sample_shading = (min_sample_shading_t)SDL2_GL_GetProcAddress("glMinSampleShadingARB");
+                break;
+            }
+        }
+    }
+    if (min_sample_shading == NULL) {
+        LOG_WARN("Supersampling is not supported by this OpenGL driver");
+        return;
+    }
+    enable(0x8C36 /* GL_SAMPLE_SHADING */);
+    min_sample_shading(1.0f);
+}
+
 static void SDL2_Harness_CreateWindow(const char* title, int width, int height, tHarness_window_type window_type) {
     int window_width, window_height;
     Uint32 extra_window_flags;
@@ -260,6 +352,10 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
     if (SDL2_Init(SDL_INIT_VIDEO) != 0) {
         LOG_PANIC2("SDL_INIT_VIDEO error: %s", SDL2_GetError());
     }
+    // Controllers already connected are reported through SDL_CONTROLLERDEVICEADDED events
+    if (SDL2_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0) {
+        LOG_WARN2("SDL_INIT_GAMECONTROLLER error: %s", SDL2_GetError());
+    }
 
     extra_window_flags = SDL_WINDOW_RESIZABLE;
     if (harness_game_config.start_full_screen) {
@@ -268,11 +364,28 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
 
     if (window_type == eWindow_type_opengl) {
 
+        // Framebuffer attributes must be set before the window is created (the visual is picked then).
+        // SDL defaults to a 16-bit depth buffer, which z-fights badly with extended draw distances.
+        SDL2_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        if (harness_game_config.msaa_samples > 0) {
+            SDL2_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+            SDL2_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, harness_game_config.msaa_samples);
+        }
         window = SDL2_CreateWindow(title,
             SDL_WINDOWPOS_CENTERED,
             SDL_WINDOWPOS_CENTERED,
             window_width, window_height,
             extra_window_flags | SDL_WINDOW_OPENGL);
+        if (window == NULL && harness_game_config.msaa_samples > 0) {
+            LOG_WARN2("Failed to create window with %dx MSAA, retrying without", harness_game_config.msaa_samples);
+            SDL2_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
+            SDL2_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
+            window = SDL2_CreateWindow(title,
+                SDL_WINDOWPOS_CENTERED,
+                SDL_WINDOWPOS_CENTERED,
+                window_width, window_height,
+                extra_window_flags | SDL_WINDOW_OPENGL);
+        }
 
         if (window == NULL) {
             LOG_PANIC2("Failed to create window: %s", SDL2_GetError());
@@ -294,6 +407,9 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
             LOG_PANIC2("Failed to create OpenGL context: %s", SDL2_GetError());
         }
         SDL2_GL_SetSwapInterval(1);
+        if (harness_game_config.supersampling) {
+            enable_sample_shading();
+        }
 
     } else {
         window = SDL2_CreateWindow(title,
@@ -400,6 +516,7 @@ static int SDL2_Harness_Platform_Init(tHarness_platform* platform) {
     platform->PaletteChanged = SDL2_Harness_PaletteChanged;
     platform->GL_GetProcAddress = SDL2_GL_GetProcAddress;
     platform->GetViewport = SDL2_Harness_GetViewport;
+    platform->GetGamepadState = SDL2_Harness_GetGamepadState;
     return 0;
 };
 

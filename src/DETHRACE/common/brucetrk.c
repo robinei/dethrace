@@ -5,6 +5,7 @@
 #include "formats.h"
 #include "globvars.h"
 #include "globvrbm.h"
+#include "harness/config.h"
 #include "harness/trace.h"
 #include "init.h"
 #include "pd/sys.h"
@@ -434,6 +435,7 @@ void RenderTrack(br_actor* pWorld, tTrack_spec* pTrack_spec, br_actor* pCamera, 
     // GLOBAL: CARM95 0x53e49c
     static br_scalar tan_fov_ish;
     static br_actor* result;
+    br_scalar yon_factor;
 
     if (pTrack_spec->columns == NULL) {
         BrZbSceneRenderAdd(pWorld);
@@ -451,9 +453,15 @@ void RenderTrack(br_actor* pWorld, tTrack_spec* pTrack_spec, br_actor* pCamera, 
             edge_after.v[0] = BR_MUL(camera->aspect, tan_fov_ish);
             edge_after.v[1] = tan_fov_ish;
             edge_after.v[2] = -1.0;
-            edge_before.v[0] = edge_after.v[0] * (camera->yon_z * gYon_factor);
-            edge_before.v[1] = edge_after.v[1] * (camera->yon_z * gYon_factor);
-            edge_before.v[2] = edge_after.v[2] * (camera->yon_z * gYon_factor);
+#ifdef DETHRACE_FIX_BUGS
+            // Added by dethrace: optionally always draw the track up to the full draw distance
+            yon_factor = harness_game_config.max_detail ? 1.f : gYon_factor;
+#else
+            yon_factor = gYon_factor;
+#endif
+            edge_before.v[0] = edge_after.v[0] * (camera->yon_z * yon_factor);
+            edge_before.v[1] = edge_after.v[1] * (camera->yon_z * yon_factor);
+            edge_before.v[2] = edge_after.v[2] * (camera->yon_z * yon_factor);
             BrMatrix34ApplyV(&edge_after, &edge_before, pCamera_to_world);
             XZToColumnXZ(&column_x, &column_z, pCamera_to_world->m[3][0] + edge_after.v[0], pCamera_to_world->m[3][2] + edge_after.v[2], pTrack_spec);
             if (min_x > 0 + column_x) {

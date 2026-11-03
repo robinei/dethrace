@@ -131,6 +131,10 @@ void FinishCars(tU32 pLast_frame_time, tU32 pTime);
 
 void InterpolateCars(tU32 pLast_frame_time, tU32 pTime);
 
+#ifdef DETHRACE_FIX_BUGS
+br_scalar GetCarDisplayRevs(tCar_spec* pCar);
+#endif
+
 void ResetOldmat(void);
 
 void GetNonCars(void);

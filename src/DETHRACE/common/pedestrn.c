@@ -8,6 +8,7 @@
 #include "globvrkm.h"
 #include "globvrpb.h"
 #include "graphics.h"
+#include "harness/config.h"
 #include "harness/trace.h"
 #include "input.h"
 #include "loading.h"
@@ -1205,7 +1206,7 @@ void MungePedModel(tPedestrian_data* pPedestrian) {
         && !pPedestrian->done_initial
         && pPedestrian->actor->model != NULL) {
 
-        y_offset += FastScalarSin(((br_scalar)MAX(pPedestrian->current_frame, 0)
+        y_offset += FRACTIONAL_DEGREES_SIN(((br_scalar)MAX(pPedestrian->current_frame, 0)
                         / (br_scalar)(pPedestrian->sequences[pPedestrian->current_sequence].looping_frame_start - 1) * 180.0))
             * pPedestrian->jump_magnitude;
     } else {
@@ -2498,6 +2499,11 @@ void MungePedestrians(tU32 pFrame_period) {
     camera_ptr = gCamera->type_data;
     max_distance = ACTIVE_PED_DXDZ;
     gMax_distance_squared = 121.f;
+#ifdef DETHRACE_FIX_BUGS
+    // Added by dethrace: keep pedestrians active over the extended draw distance
+    max_distance *= harness_game_config.draw_distance;
+    gMax_distance_squared *= harness_game_config.draw_distance * harness_game_config.draw_distance;
+#endif
     if (!gAction_replay_mode) {
         MungePedGibs(pFrame_period);
     }

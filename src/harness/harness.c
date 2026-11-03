@@ -294,6 +294,15 @@ int Harness_Init(int* argc, char* argv[]) {
     // install signal handler
     harness_game_config.install_signalhandler = 1;
 
+    harness_game_config.gl_nearest_filtering = 0;
+    harness_game_config.gl_sharp_filtering = 0;
+    harness_game_config.gl_widescreen = 1;
+    harness_game_config.draw_distance = 1.0f;
+    harness_game_config.max_detail = 0;
+    harness_game_config.msaa_samples = 4;
+    harness_game_config.supersampling = 0;
+    harness_game_config.texture_upscaler = 0;
+
     // first load ini file if exists
     Harness_ProcessIniFile();
 
@@ -492,6 +501,34 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         gSausage_override = (value[0] == '1');
     } else if (MATCH("General", "Hires")) {
         gGraf_spec_index = (value[0] == '1');
+    } else if (MATCH("General", "TextureFiltering")) {
+        // "sharp" is nearest-style texels with anti-aliased edges, so the game treats it like "nearest"
+        harness_game_config.gl_sharp_filtering = (strcasecmp(value, "sharp") == 0);
+        harness_game_config.gl_nearest_filtering = (strcasecmp(value, "nearest") == 0) || harness_game_config.gl_sharp_filtering;
+    } else if (MATCH("General", "DrawDistance")) {
+        harness_game_config.draw_distance = atof(value);
+        if (harness_game_config.draw_distance < 1.0f) {
+            harness_game_config.draw_distance = 1.0f;
+        }
+    } else if (MATCH("General", "MaxDetail")) {
+        harness_game_config.max_detail = (value[0] == '1');
+    } else if (MATCH("General", "TextureUpscaler")) {
+        if (strcasecmp(value, "mmpx2x") == 0) {
+            harness_game_config.texture_upscaler = 1;
+        } else if (strcasecmp(value, "xbr2x") == 0) {
+            harness_game_config.texture_upscaler = 2;
+        } else {
+            harness_game_config.texture_upscaler = 0;
+        }
+    } else if (MATCH("General", "Supersampling")) {
+        harness_game_config.supersampling = (value[0] == '1');
+    } else if (MATCH("General", "MSAA")) {
+        harness_game_config.msaa_samples = atoi(value);
+        if (harness_game_config.msaa_samples < 2) {
+            harness_game_config.msaa_samples = 0;
+        }
+    } else if (MATCH("General", "Widescreen")) {
+        harness_game_config.gl_widescreen = (value[0] == '1');
     } else if (MATCH("General", "PhysicsPerFrame")) {
         harness_game_config.physics_per_frame = (value[0] == '1');
     }
@@ -599,6 +636,94 @@ int Harness_Hook_isalnum(int c) {
     }
 
     return isalnum(c);
+}
+
+// Widescreen support for OpenGL (3dfx emulation) mode.
+//
+// The 2d interface stays 640x480, scaled and centered (4:3) in the window. The main 3d view is rendered into
+// a full-width sub-pixelmap of the back screen; while the game has marked that view as extendable, the OpenGL
+// viewport for it is widened to the full window width and the camera aspect ratio widened to match (Hor+).
+static br_pixelmap* widescreen_back_screen;
+static br_pixelmap* widescreen_render_screen;
+
+// Window width divided by the width of the 4:3 interface area
+static float widescreen_factor(br_pixelmap* back_screen) {
+    int x, y;
+    float sx, sy;
+
+    if (gHarness_platform.GetViewport == NULL) {
+        return 1.0f;
+    }
+    gHarness_platform.GetViewport(&x, &y, &sx, &sy);
+    if (x <= 0 || sx <= 0.0f) {
+        return 1.0f;
+    }
+    return (2 * x + back_screen->width * sx) / (back_screen->width * sx);
+}
+
+float Harness_Hook_WidescreenBeginView(br_pixelmap* back_screen, br_pixelmap* render_screen, int allow) {
+    float factor;
+
+    widescreen_back_screen = NULL;
+    widescreen_render_screen = NULL;
+    if (!allow || !harness_game_config.opengl_3dfx_mode || !harness_game_config.gl_widescreen) {
+        return 1.0f;
+    }
+    // Only a view spanning the full interface width can be extended
+    if (render_screen->base_x != 0 || render_screen->width != back_screen->width) {
+        return 1.0f;
+    }
+    factor = widescreen_factor(back_screen);
+    if (factor <= 1.0f) {
+        return 1.0f;
+    }
+    widescreen_back_screen = back_screen;
+    widescreen_render_screen = render_screen;
+    return factor;
+}
+
+void Harness_Hook_WidescreenEndView(void) {
+    widescreen_back_screen = NULL;
+    widescreen_render_screen = NULL;
+}
+
+void Harness_Hook_WidescreenFillBackground(br_pixelmap* pixelmap, br_uint_16 colour_565) {
+    typedef void (*glClearColor_t)(float, float, float, float);
+    typedef void (*glClear_t)(unsigned int);
+    static glClearColor_t clear_colour;
+    static glClear_t clear;
+    int r, g, b;
+
+    // The game fills the background (where no 3d geometry is drawn) through the 4:3 2d layer, so the
+    // extended areas at the sides need the same colour
+    if (pixelmap == NULL || pixelmap != widescreen_back_screen || gHarness_platform.GL_GetProcAddress == NULL) {
+        return;
+    }
+    if (clear == NULL) {
+        clear_colour = (glClearColor_t)gHarness_platform.GL_GetProcAddress("glClearColor");
+        clear = (glClear_t)gHarness_platform.GL_GetProcAddress("glClear");
+        if (clear == NULL || clear_colour == NULL) {
+            return;
+        }
+    }
+    r = (colour_565 >> 11) & 0x1f;
+    g = (colour_565 >> 5) & 0x3f;
+    b = colour_565 & 0x1f;
+    clear_colour(r / 31.0f, g / 63.0f, b / 31.0f, 1.0f);
+    clear(0x00004000 /* GL_COLOR_BUFFER_BIT */);
+    clear_colour(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+void Harness_GL_AdjustRenderViewport(br_pixelmap* target, int* x, int* y, int* width, int* height) {
+    int vx, vy;
+    float sx, sy;
+
+    if (target == NULL || target != widescreen_render_screen || gHarness_platform.GetViewport == NULL) {
+        return;
+    }
+    gHarness_platform.GetViewport(&vx, &vy, &sx, &sy);
+    *x = 0;
+    *width = 2 * vx + (int)(widescreen_back_screen->width * sx + 0.5f);
 }
 
 // For physics-per-frame. We are calling some functions more often (like SkidNoise), so need to reduce the probability

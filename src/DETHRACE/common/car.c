@@ -898,6 +898,11 @@ void RememberSafePosition(tCar_spec* car, tU32 pTime) {
     time_count = 0;
 }
 
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace: set by ControlOurCar, ApplyPhysicsToCars then runs ControlCar once per physics step
+static int gControl_our_car_per_step;
+#endif
+
 // IDA: void __usercall ControlOurCar(tU32 pTime_difference@<EAX>)
 // FUNCTION: CARM95 0x00476d09
 void ControlOurCar(tU32 pTime_difference) {
@@ -956,7 +961,15 @@ void ControlOurCar(tU32 pTime_difference) {
                 }
             }
         }
+#ifdef DETHRACE_FIX_BUGS
+        // ControlCar integrates the steering once per call, and was tuned to be called every 40ms.
+        // ApplyPhysicsToCars calls it once at the start of each physics step instead, so the steering speed
+        // does not depend on the frame rate, and steering changes line up with the steps the display
+        // interpolates between.
+        gControl_our_car_per_step = 1;
+#else
         ControlCar[gControl__car](car, pTime_difference / 1000.0f);
+#endif
         RememberSafePosition(car, pTime_difference);
         if (gCamera_reset) {
             BrVector3SetFloat(&minus_k, 0.0f, 0.0f, -1.0f);
@@ -1021,7 +1034,12 @@ void CalcEngineForce(tCar_spec* c, br_scalar dt) {
     }
     if (c->keys.dec || (c->keys.acc && !c->gear) || c->joystick.dec > 0 || (c->joystick.acc > 0 && !c->gear)) {
         if (c->joystick.dec > 0) {
+#ifdef DETHRACE_FIX_BUGS
+            // integer division made analog braking strength always 0
+            brake_temp = (double)c->joystick.dec / 0x10000 * c->brake_increase;
+#else
             brake_temp = (double)(c->joystick.dec / 0x10000) * c->brake_increase;
+#endif
             c->brake_force = brake_temp + c->initial_brake;
         }
         if (c->brake_force == 0.0f) {
@@ -1053,6 +1071,125 @@ void CalcEngineForce(tCar_spec* c, br_scalar dt) {
     }
     return;
 }
+
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace: smooth rendering between physics steps.
+//
+// The physics runs in 40ms steps and ends up to one step ahead of the frame time. The original code moves the cars
+// back to the frame time by extrapolating with the current velocities, which leaves the orientation changing in
+// visible 40ms steps (eg. the camera bobbing when driving over uneven ground at high frame rates).
+// Instead, remember each car's pose at the start of the last physics step and interpolate towards the newest pose.
+typedef struct tStep_start_pose {
+    tCar_spec* car;
+    br_matrix34 mat;
+    // values shown to the player (wheel steering, suspension, speedo, revs) at the start of the step
+    br_scalar steering_angle;
+    br_scalar sus_position[4];
+    br_scalar speedo_speed;
+    br_scalar revs;
+    // set each frame by InterpolateCars: where between the step start and end this frame is
+    int interpolating;
+    br_scalar t;
+    br_scalar display_revs;
+} tStep_start_pose;
+static tStep_start_pose gStep_start_poses[COUNT_OF(gActive_car_list)];
+static int gStep_start_pose_count;
+static tU32 gStep_start_time;
+
+static void RememberStepStartPoses(void) {
+    int i;
+
+    gStep_start_pose_count = MIN(gNum_cars_and_non_cars, COUNT_OF(gStep_start_poses));
+    for (i = 0; i < gStep_start_pose_count; i++) {
+        tStep_start_pose* pose = &gStep_start_poses[i];
+        tCar_spec* car = gActive_car_list[i];
+        br_vector3 minus_k;
+
+        pose->car = car;
+        BrMatrix34Copy(&pose->mat, &car->car_master_actor->t.t.mat);
+        pose->interpolating = 0;
+        if (car->driver > eDriver_non_car) {
+            // same as FinishCars computes from the physics state at the end of a frame
+            BrVector3Negate(&minus_k, (br_vector3*)pose->mat.m[2]);
+            pose->speedo_speed = BrVector3Dot(&minus_k, &car->v) / (WORLD_SCALE * 1000.0f);
+            pose->steering_angle = BrRadianToDegree(atan((car->wpos[0].v[2] - car->wpos[2].v[2]) * car->curvature));
+            pose->sus_position[0] = (car->ride_height - car->oldd[0]) / WORLD_SCALE_D;
+            pose->sus_position[1] = (car->ride_height - car->oldd[1]) / WORLD_SCALE_D;
+            pose->sus_position[2] = (car->ride_height - car->oldd[2]) / WORLD_SCALE_D;
+            pose->sus_position[3] = (car->ride_height - car->oldd[3]) / WORLD_SCALE_D;
+            pose->revs = car->revs;
+        }
+    }
+    gStep_start_time = gLast_mechanics_time;
+}
+
+static tStep_start_pose* FindStepStartPose(tCar_spec* pCar, int pIndex) {
+    int i;
+
+    if (pIndex < gStep_start_pose_count && gStep_start_poses[pIndex].car == pCar) {
+        return &gStep_start_poses[pIndex];
+    }
+    for (i = 0; i < gStep_start_pose_count; i++) {
+        if (gStep_start_poses[i].car == pCar) {
+            return &gStep_start_poses[i];
+        }
+    }
+    return NULL;
+}
+
+static br_scalar LerpScalar(br_scalar pFrom, br_scalar pTo, br_scalar pT) {
+    return pFrom + (pTo - pFrom) * pT;
+}
+
+// Revs are physics state for player driven cars, so the interpolated value is kept separately for the
+// rev counter and engine sound
+br_scalar GetCarDisplayRevs(tCar_spec* pCar) {
+    tStep_start_pose* pose = FindStepStartPose(pCar, 0);
+
+    if (pose != NULL && pose->interpolating && pCar->driver >= eDriver_net_human) {
+        return pose->display_revs;
+    }
+    return pCar->revs;
+}
+
+static void InterpolatePose(br_matrix34* pResult, br_matrix34* pFrom, br_matrix34* pTo, br_scalar pT) {
+    br_quat q_from;
+    br_quat q_to;
+    br_quat q;
+    br_vector3 translation;
+    br_scalar length;
+
+    translation.v[0] = pFrom->m[3][0] + (pTo->m[3][0] - pFrom->m[3][0]) * pT;
+    translation.v[1] = pFrom->m[3][1] + (pTo->m[3][1] - pFrom->m[3][1]) * pT;
+    translation.v[2] = pFrom->m[3][2] + (pTo->m[3][2] - pFrom->m[3][2]) * pT;
+    BrMatrix34ToQuat(&q_from, pFrom);
+    BrMatrix34ToQuat(&q_to, pTo);
+    // q and -q are the same rotation: take the shortest path, otherwise the blend passes near zero and the
+    // resulting matrix is scaled down
+    if (q_from.x * q_to.x + q_from.y * q_to.y + q_from.z * q_to.z + q_from.w * q_to.w < 0.f) {
+        q_to.x = -q_to.x;
+        q_to.y = -q_to.y;
+        q_to.z = -q_to.z;
+        q_to.w = -q_to.w;
+    }
+    // the rotation between physics steps is small, so a normalised linear blend is accurate enough
+    q.x = q_from.x + (q_to.x - q_from.x) * pT;
+    q.y = q_from.y + (q_to.y - q_from.y) * pT;
+    q.z = q_from.z + (q_to.z - q_from.z) * pT;
+    q.w = q_from.w + (q_to.w - q_from.w) * pT;
+    length = BR_SQRT(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+    if (length < 0.0001f) {
+        BrMatrix34Copy(pResult, pTo);
+        return;
+    }
+    q.x /= length;
+    q.y /= length;
+    q.z /= length;
+    q.w /= length;
+    BrQuatToMatrix34(pResult, &q);
+    BrVector3Copy((br_vector3*)pResult->m[3], &translation);
+}
+#endif
 
 // IDA: void __usercall PrepareCars(tU32 pFrame_start_time@<EAX>)
 // FUNCTION: CARM95 0x00477b11
@@ -1148,6 +1285,21 @@ void FinishCars(tU32 pLast_frame_time, tU32 pTime) {
             car->rr_sus_position = (car->ride_height - car->oldd[1]) / WORLD_SCALE_D;
             car->lf_sus_position = (car->ride_height - car->oldd[2]) / WORLD_SCALE_D;
             car->rf_sus_position = (car->ride_height - car->oldd[3]) / WORLD_SCALE_D;
+#ifdef DETHRACE_FIX_BUGS
+            {
+                // These only change once per physics step: show them interpolated like the car's position
+                tStep_start_pose* pose = FindStepStartPose(car, i);
+                if (pose != NULL && pose->interpolating) {
+                    car->speedo_speed = LerpScalar(pose->speedo_speed, car->speedo_speed, pose->t);
+                    car->steering_angle = LerpScalar(pose->steering_angle, car->steering_angle, pose->t);
+                    car->lr_sus_position = LerpScalar(pose->sus_position[0], car->lr_sus_position, pose->t);
+                    car->rr_sus_position = LerpScalar(pose->sus_position[1], car->rr_sus_position, pose->t);
+                    car->lf_sus_position = LerpScalar(pose->sus_position[2], car->lf_sus_position, pose->t);
+                    car->rf_sus_position = LerpScalar(pose->sus_position[3], car->rf_sus_position, pose->t);
+                    pose->display_revs = LerpScalar(pose->revs, car->revs, pose->t);
+                }
+            }
+#endif
             for (wheel = 0; wheel < 4; wheel++) {
                 if (car->oldd[wheel] < car->susp_height[wheel >> 1] && gCurrent_race.material_modifiers[car->material_index[wheel]].smoke_type >= 2 && !car->doing_nothing_flag) {
                     GenerateContinuousSmoke(car, wheel, pTime);
@@ -1156,6 +1308,7 @@ void FinishCars(tU32 pLast_frame_time, tU32 pTime) {
         }
     }
 }
+
 
 // IDA: void __usercall InterpolateCars(tU32 pLast_frame_time@<EAX>, tU32 pTime@<EDX>)
 // FUNCTION: CARM95 0x00478928
@@ -1173,8 +1326,35 @@ void InterpolateCars(tU32 pLast_frame_time, tU32 pTime) {
     for (i = 0; i < gNum_cars_and_non_cars; i++) {
         car = gActive_car_list[i];
         BrMatrix34Copy(&car->oldmat, &car->car_master_actor->t.t.mat);
+#ifdef DETHRACE_FIX_BUGS
+        {
+            tStep_start_pose* start_pose;
+            br_scalar t;
+            tU32 step_length;
+
+            start_pose = FindStepStartPose(car, i);
+            step_length = gLast_mechanics_time - gStep_start_time;
+            if (start_pose != NULL) {
+                start_pose->interpolating = 0;
+            }
+            if (start_pose != NULL
+                && step_length > 0 && step_length <= 2 * PHYSICS_STEP_TIME
+                && pLast_frame_time >= gStep_start_time && pLast_frame_time <= gLast_mechanics_time
+                // don't interpolate across a teleport (eg. car recovery)
+                && Vector3DistanceSquared((br_vector3*)start_pose->mat.m[3], (br_vector3*)car->oldmat.m[3]) < 100.f) {
+                t = (pLast_frame_time - gStep_start_time) / (br_scalar)step_length;
+                InterpolatePose(&car->car_master_actor->t.t.mat, &start_pose->mat, &car->oldmat, t);
+                start_pose->interpolating = 1;
+                start_pose->t = t;
+            } else {
+                SimpleRotate((tCollision_info*)car, -dt);
+                TranslateCar((tCollision_info*)car, -dt);
+            }
+        }
+#else
         SimpleRotate((tCollision_info*)car, -dt);
         TranslateCar((tCollision_info*)car, -dt);
+#endif
         BrMatrix34ApplyP(&car->pos, &car->cmpos, &car->car_master_actor->t.t.mat);
         BrVector3InvScale(&car->pos, &car->pos, WORLD_SCALE);
     }
@@ -1202,6 +1382,9 @@ void ResetOldmat(void) {
             BrMatrix34Copy(&car->car_master_actor->t.t.mat, &mat);
         }
     }
+#ifdef DETHRACE_FIX_BUGS
+    RememberStepStartPoses();
+#endif
 }
 
 // IDA: void __cdecl GetNonCars()
@@ -1344,6 +1527,11 @@ void ApplyPhysicsToCars(tU32 last_frame_time, tU32 pTime_difference) {
     while (gLast_mechanics_time < frame_end_time && step_number < PHYSICS_STEP_COUNT) {
         step_number++;
         ResetOldmat();
+#ifdef DETHRACE_FIX_BUGS
+        if (gControl_our_car_per_step && !gCar_flying) {
+            ControlCar[gControl__car](&gProgram_state.current_car, gDt);
+        }
+#endif
         BrVector3Copy(&gProgram_state.current_car.old_v, &gProgram_state.current_car.v);
         if (&gProgram_state.current_car != gCar_to_view) {
             BrVector3Copy(&gCar_to_view->old_v, &gCar_to_view->v);
@@ -4470,7 +4658,7 @@ void MungeCarGraphics(tU32 pFrame_period) {
         if (the_car->driver < eDriver_net_human && (!gAction_replay_mode || !ReplayIsPaused())) {
             if (gCountdown) {
                 rev_angle = frac(FRandomBetween(0.4f, 1.6f) * (GetTotalTime() / ((float)gCountdown * 100.0f))) * 360.0;
-                sine_angle = FastScalarSin(rev_angle);
+                sine_angle = FRACTIONAL_DEGREES_SIN(rev_angle);
                 raw_revs = the_car->red_line * fabs(sine_angle);
                 rev_reducer = (11.0 - (double)gCountdown) / 10.0;
                 the_car->revs = rev_reducer * raw_revs;
@@ -4608,6 +4796,12 @@ void MungeCarGraphics(tU32 pFrame_period) {
             if (gNet_mode != eNet_mode_none && CAR_IS_IT_OR_FOX(the_car)) {
                 distance_from_camera = 0.f;
             }
+#ifdef DETHRACE_FIX_BUGS
+            // Added by dethrace: optionally always use the most detailed car model
+            if (harness_game_config.max_detail) {
+                distance_from_camera = 0.f;
+            }
+#endif
 #ifdef DETHRACE_FIX_BUGS
 #undef CAR_IS_IT_OR_FOX
 #endif
