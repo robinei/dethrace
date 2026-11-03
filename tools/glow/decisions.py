@@ -74,3 +74,6 @@ add('XAPCNOSE', 'car_light', 0.6, 'rects', [[0, 40, 13, 18], [48, 40, 14, 18]], 
 add('R02DED1 R03DED1 R04DED1 R05DED1 R06DED1 R08DED1', 'fire', 0.8, 'cand', note='burning wreck, flames only (name uses zero)')
 for k in ('FLAMES.PIX', 'APTLITE.PIX', 'RO2DED1.PIX', 'RO3DED1.PIX', 'RO4DED1.PIX', 'RO5DED1.PIX', 'RO6DED1.PIX', 'RO8DED1.PIX'):
     D.pop(k, None)
+
+# glowing lamps whose surroundings share their colour (rock, rusty plates, panels): keep the marked core
+NO_GROW = set(n + '.PIX' for n in 'DECK2 LITPLATE MINLIT MNWALITE TUNLWAL2 TUNLROOF SEALIGHT TRILITE'.split())
