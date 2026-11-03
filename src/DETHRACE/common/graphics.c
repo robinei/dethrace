@@ -1863,6 +1863,11 @@ void FlashyMapCheckpoint(int pIndex, tU32 pTime) {
 
 // IDA: int __usercall ConditionallyFillWithSky@<EAX>(br_pixelmap *pPixelmap@<EAX>)
 // FUNCTION: CARM95 0x004b784d
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: whether the frame being rendered is at night (see Harness_Hook_Night)
+static int gNight;
+#endif
+
 int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
     int bgnd_col;
 
@@ -1884,7 +1889,7 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 #ifdef DETHRACE_3DFX_PATCH
     if (pPixelmap->type == BR_PMT_RGB_565) {
         bgnd_col = PaletteEntry16Bit(gRender_palette, bgnd_col);
-        if (harness_game_config.gl_night) {
+        if (gNight) {
             // Added by dethrace: the background (where nothing is drawn) darkens with the night mode too
             bgnd_col = ((int)(((bgnd_col >> 11) & 0x1f) * harness_game_config.gl_night_brightness) << 11)
                 | ((int)(((bgnd_col >> 5) & 0x3f) * harness_game_config.gl_night_brightness) << 5)
@@ -1923,7 +1928,7 @@ static void SetNightLighting(br_actor* pCamera) {
     br_vector3 dv;
 
     count = 0;
-    if (!harness_game_config.gl_night) {
+    if (!gNight) {
         Harness_Hook_SceneLighting(0, NULL, 0);
         return;
     }
@@ -2151,6 +2156,8 @@ void RenderAFrame(int pDepth_mask_on) {
 #endif
 
 #ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: night on tracks with the darkness depth cue (or always/never, see Night in the config)
+    gNight = Harness_Hook_Night(gProgram_state.current_depth_effect.type == eDepth_effect_darkness);
     // Added by dethrace: render the 3d view offscreen for post-processing effects (depth of field)
     post_processing = !gMap_mode && Harness_Hook_PostProcessBegin(gScreen);
     if (!gMap_mode) {

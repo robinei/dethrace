@@ -147,6 +147,8 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon);
 // Night (OpenGL mode): while on, the 3d scenes are darkened and lit by `count` spot lights (headlights) of
 // 8 floats: camera space position, range, camera space direction and strength
 void Harness_Hook_SceneLighting(int on, const float* lights, int count);
+// Decides whether this frame is at night (Night = 1, or auto and the view has the darkness depth cue)
+int Harness_Hook_Night(int pDarkness);
 
 // glrend callbacks
 int Harness_GL_SceneLighting(float* brightness, const float** lights);

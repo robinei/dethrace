@@ -307,7 +307,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_dof_strength = 3.0f;
     harness_game_config.gl_glow = 0;
     harness_game_config.gl_glow_strength = 0.7f;
-    harness_game_config.gl_night = 0;
+    harness_game_config.gl_night = 2;
     harness_game_config.gl_night_brightness = 0.3f;
     harness_game_config.gl_headlight_strength = 2.0f;
     harness_game_config.draw_distance = 1.0f;
@@ -590,7 +590,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
     } else if (MATCH("General", "DepthOfFieldStrength")) {
         harness_game_config.gl_dof_strength = ClampConfigFloat(atof(value), 0.0f, 20.0f);
     } else if (MATCH("General", "Night")) {
-        harness_game_config.gl_night = (value[0] == '1');
+        // 0 = off, 1 = on, auto = on tracks with the darkness depth cue
+        harness_game_config.gl_night = strcmp(value, "auto") == 0 ? 2 : (value[0] == '1');
     } else if (MATCH("General", "NightBrightness")) {
         harness_game_config.gl_night_brightness = ClampConfigFloat(atof(value), 0.0f, 1.0f);
     } else if (MATCH("General", "HeadlightStrength")) {
@@ -873,6 +874,14 @@ float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indic
     return entry->intensity;
 }
 
+static int night_now;
+
+int Harness_Hook_Night(int pDarkness) {
+    night_now = harness_game_config.opengl_3dfx_mode
+        && (harness_game_config.gl_night == 1 || (harness_game_config.gl_night == 2 && pDarkness));
+    return night_now;
+}
+
 static int scene_lighting_on;
 static float scene_lights[8 * BR_GL_MAX_SCENE_LIGHTS];
 static int scene_light_count;
@@ -889,7 +898,7 @@ void Harness_Hook_SceneLighting(int on, const float* lights, int count) {
 int Harness_GL_SceneLighting(float* brightness, const float** lights) {
     *brightness = 1.0f;
     *lights = scene_lights;
-    if (!scene_lighting_on || !harness_game_config.gl_night) {
+    if (!scene_lighting_on || !night_now) {
         return 0;
     }
     *brightness = harness_game_config.gl_night_brightness;

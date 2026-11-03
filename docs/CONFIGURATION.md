@@ -61,8 +61,9 @@ Glow = 0
 GlowStrength = 0.7
 
 ; Only used in 3dfx mode. Night: everything is darkened to NightBrightness, except light sources (lit windows,
-; neon, lamps... from the glow table), and the cars' headlights light the road and whatever is ahead of them
-Night = 0
+; neon, lamps... from the glow table), and the cars' headlights light the road and whatever is ahead of them.
+; auto = on the tracks with the darkness depth cue (most of which have night skies), 1 = always, 0 = never
+Night = auto
 NightBrightness = 0.3
 HeadlightStrength = 2
 
