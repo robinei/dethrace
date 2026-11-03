@@ -64,6 +64,8 @@ typedef struct tHarness_game_config {
     // OpenGL (3dfx emulation) mode: extend the 3d view to fill widescreen displays
     int gl_widescreen;
     int gl_widescreen_hud;
+    int gl_distance_fog;
+    float gl_distance_fade;
 
     // Multiplier for the draw distance chosen in the game's options
     float draw_distance;

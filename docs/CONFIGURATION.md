@@ -39,6 +39,14 @@ Widescreen = 1
 ; kill counters, speedo, damage display, power-ups) out to the window edges. Centred ones stay centred
 WidescreenHud = 1
 
+; Only used in 3dfx mode. Fog and darkness (set per track) by distance: starting where the original's does
+; and complete at the (extended) draw distance, so nothing pops in at the far edge. 0 = original approximation
+DistanceFog = 1
+
+; Only used in 3dfx mode. On tracks without fog or darkness, fade the scenery into the sky from this fraction
+; of the draw distance onwards, instead of it popping in at the far edge. 0 disables
+DistanceFade = 0.8
+
 ; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1

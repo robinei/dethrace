@@ -175,6 +175,27 @@ void FogAccordingToGPSCDE(br_material* pMaterial) {
 
     start = gProgram_state.current_depth_effect.start;
     end = gProgram_state.current_depth_effect.end;
+#ifdef DETHRACE_FIX_BUGS
+    if (harness_game_config.gl_distance_fog) {
+        // Added by dethrace: the OpenGL renderer fogs by distance, from fog_min to fully fogged at fog_max.
+        // Start where the original does (unaffected by the extended draw distance) and be fully
+        // fogged at the (extended) yon distance, so nothing pops in at the far edge
+        switch (gProgram_state.current_depth_effect.type) {
+        case eDepth_effect_darkness:
+        case eDepth_effect_fog:
+            pMaterial->fog_min = pow(10.0f, -start * 0.1f) * GetYon();
+            pMaterial->fog_max = DepthCueingShiftToDistance(end);
+            pMaterial->fog_colour = gProgram_state.current_depth_effect.type == eDepth_effect_fog ? BR_COLOUR_RGB(248, 248, 248) : BR_COLOUR_RGB(0, 0, 0);
+            pMaterial->flags |= BR_MATF_FOG_LOCAL;
+            break;
+        case eDepth_effect_none:
+            pMaterial->flags &= ~BR_MATF_FOG_LOCAL;
+            break;
+        }
+        BrMaterialUpdate(pMaterial, BR_MATU_ALL);
+        return;
+    }
+#endif
 
     switch (gProgram_state.current_depth_effect.type) {
     case eDepth_effect_darkness:

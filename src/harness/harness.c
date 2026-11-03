@@ -298,6 +298,8 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_sharp_filtering = 0;
     harness_game_config.gl_widescreen = 1;
     harness_game_config.gl_widescreen_hud = 1;
+    harness_game_config.gl_distance_fog = 1;
+    harness_game_config.gl_distance_fade = 0.8f;
     harness_game_config.draw_distance = 1.0f;
     harness_game_config.max_detail = 0;
     harness_game_config.msaa_samples = 4;
@@ -567,6 +569,10 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_widescreen = (value[0] == '1');
     } else if (MATCH("General", "WidescreenHud")) {
         harness_game_config.gl_widescreen_hud = (value[0] == '1');
+    } else if (MATCH("General", "DistanceFog")) {
+        harness_game_config.gl_distance_fog = (value[0] == '1');
+    } else if (MATCH("General", "DistanceFade")) {
+        harness_game_config.gl_distance_fade = ClampConfigFloat(atof(value), 0.0f, 0.99f);
     } else if (MATCH("General", "PhysicsPerFrame")) {
         harness_game_config.physics_per_frame = (value[0] == '1');
     }
@@ -776,6 +782,16 @@ float Harness_Hook_Hud2dBegin(float* x_offset) {
 
 void Harness_Hook_Hud2dEnd(void) {
     hud_2d_wide = 0;
+}
+
+static int distance_fade_on;
+
+void Harness_Hook_DistanceFade(int on) {
+    distance_fade_on = on;
+}
+
+float Harness_GL_DistanceFade(void) {
+    return distance_fade_on ? harness_game_config.gl_distance_fade : 0.0f;
 }
 
 int Harness_GL_OverlayRegions(const float** regions) {

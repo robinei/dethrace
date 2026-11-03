@@ -1927,6 +1927,7 @@ void RenderAFrame(int pDepth_mask_on) {
     float widescreen_factor;
     br_scalar old_aspect;
     br_angle old_fov;
+    int fade_to_sky;
 #endif
 
 #ifdef DETHRACE_FIX_BUGS
@@ -2107,10 +2108,23 @@ void RenderAFrame(int pDepth_mask_on) {
     {
         RenderShadows(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world);
         BrZbSceneRenderBegin(gUniverse_actor, gCamera, gRender_screen, gDepth_buffer);
+#ifdef DETHRACE_3DFX_PATCH
+        // Added by dethrace: without a depth effect, fade the far geometry into the sky instead of having it
+        // pop in at the yon distance. The sky is drawn first for that
+        fade_to_sky = gMaterial_fogging && harness_game_config.gl_distance_fade > 0.0f
+            && gProgram_state.current_depth_effect.type == eDepth_effect_none;
+        if (fade_to_sky) {
+            DepthEffectSky(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world);
+            Harness_Hook_DistanceFade(1);
+        }
+#endif
         ProcessNonTrackActors(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, &old_camera_matrix);
         ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 0);
         RenderLollipops();
 
+#ifdef DETHRACE_3DFX_PATCH
+        if (!fade_to_sky)
+#endif
         DepthEffectSky(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world);
         DepthEffect(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world);
         if (!gAusterity_mode) {
@@ -2121,6 +2135,9 @@ void RenderAFrame(int pDepth_mask_on) {
         RenderSparks(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
         RenderProximityRays(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
         BrZbSceneRenderEnd();
+#ifdef DETHRACE_3DFX_PATCH
+        Harness_Hook_DistanceFade(0);
+#endif
     }
 #ifdef DETHRACE_3DFX_PATCH
     PDLockRealBackScreen(1);
