@@ -833,7 +833,8 @@ float Harness_Hook_HudShift(int left, int right) {
 void Harness_Hook_HudRegion(int left, int top, int right, int bottom, float shift) {
     float* r;
 
-    if (hud_back_screen == NULL || shift == 0.0f || right <= left || bottom <= top || hud_region_count >= BR_GL_MAX_OVERLAY_REGIONS) {
+    // (regions with no shift stay put, over the places of moved ones: centred messages)
+    if (hud_back_screen == NULL || right <= left || bottom <= top || hud_region_count >= BR_GL_MAX_OVERLAY_REGIONS) {
         return;
     }
     r = &hud_regions[5 * hud_region_count++];

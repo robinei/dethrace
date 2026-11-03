@@ -424,8 +424,17 @@ static void HudHeadupRegion(tHeadup* pHeadup) {
         right = left + pHeadup->data.image_info.image->width;
         bottom = top + pHeadup->data.image_info.image->height;
         break;
+    case eHeadup_fancy:
+        // slides in and out (by its offset, slanted by up to its shear) and stays put: where it is this frame
+        left = pHeadup->x + MIN(0, pHeadup->data.fancy_info.offset) - abs(pHeadup->data.fancy_info.shear_amount);
+        right = pHeadup->x + MAX(0, pHeadup->data.fancy_info.offset) + pHeadup->data.fancy_info.image->width + abs(pHeadup->data.fancy_info.shear_amount);
+        Harness_Hook_HudRegion(MAX(left, 0), top, MIN(right, gBack_screen->width), top + pHeadup->data.fancy_info.image->height, 0.f);
+        return;
+    case eHeadup_box_text:
+        // centred, stays put
+        Harness_Hook_HudRegion(gBack_screen->width / 10, top, 9 * gBack_screen->width / 10, top + 60, 0.f);
+        return;
     default:
-        // fancy (sliding) and boxed headups are centred
         return;
     }
     if (pHeadup->dimmed_background) {
