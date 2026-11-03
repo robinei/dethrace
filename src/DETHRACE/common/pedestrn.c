@@ -751,6 +751,56 @@ void KillPedestrian(tPedestrian_data* pPedestrian) {
     }
 }
 
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: the pedestrian sprites have a little dithered shadow drawn under their feet (a
+// checkerboard of near black texels), which shows as a dotted line at high resolutions. With the blob shadows
+// it goes: the near black texels in the lower third with no opaque neighbours left, right, above or below
+static void RemoveDitheredShadow(br_pixelmap* pPixelmap) {
+    tU8* pixels;
+    br_colour* palette;
+    br_colour c;
+    tU8 dark[256];
+    int x;
+    int y;
+    int w;
+    int h;
+    int rb;
+    tU8 i;
+    int removed;
+
+    if (pPixelmap == NULL || pPixelmap->type != BR_PMT_INDEX_8 || pPixelmap->pixels == NULL
+        || gRender_palette == NULL || gRender_palette->pixels == NULL) {
+        return;
+    }
+    palette = (br_colour*)gRender_palette->pixels;
+    for (x = 0; x < 256; x++) {
+        c = palette[x];
+        dark[x] = x != 0 && 30 * BR_RED(c) + 59 * BR_GRN(c) + 11 * BR_BLU(c) < 60 * 100;
+    }
+    pixels = (tU8*)pPixelmap->pixels;
+    w = pPixelmap->width;
+    h = pPixelmap->height;
+    rb = pPixelmap->row_bytes;
+#define PED_PIXEL(X, Y) ((X) < 0 || (X) >= w || (Y) < 0 || (Y) >= h ? 0 : pixels[(Y) * rb + (X)])
+    removed = 0;
+    for (y = h * 2 / 3; y < h; y++) {
+        for (x = 0; x < w; x++) {
+            i = pixels[y * rb + x];
+            if (dark[i]
+                && PED_PIXEL(x - 1, y) == 0 && PED_PIXEL(x + 1, y) == 0 && PED_PIXEL(x, y - 1) == 0 && PED_PIXEL(x, y + 1) == 0) {
+                pixels[y * rb + x] = 0;
+                removed = 1;
+            }
+        }
+    }
+#undef PED_PIXEL
+    if (removed) {
+        // (it may have been uploaded already)
+        BrMapUpdate(pPixelmap, BR_MAPU_ALL);
+    }
+}
+#endif
+
 // IDA: void __usercall CalcPedWidthNHeight(tPedestrian_data *pPedestrian@<EAX>, br_pixelmap *pPixelmap@<EDX>, br_scalar *pHeight@<EBX>, br_scalar *pWidth@<ECX>)
 // FUNCTION: CARM95 0x00457492
 void CalcPedWidthNHeight(tPedestrian_data* pPedestrian, br_pixelmap* pPixelmap, br_scalar* pHeight, br_scalar* pWidth) {
@@ -2846,6 +2896,12 @@ void CreatePedestrian(FILE* pG, tPedestrian_instruction* pInstructions, int pIns
                         }
                         BrMapAdd(the_sequence->frames[k].pixelmap);
                     }
+#ifdef DETHRACE_3DFX_PATCH
+                    // (the pixelmaps are mostly loaded already, so this is done whether found or loaded)
+                    if (harness_game_config.gl_pedestrian_shadows && harness_game_config.opengl_3dfx_mode) {
+                        RemoveDitheredShadow(the_sequence->frames[k].pixelmap);
+                    }
+#endif
                     GetALineAndDontArgue(pG, s2);
                     str2 = strtok(s2, "\t ,/");
                     sscanf(str2, "%f", &temp_float1);
