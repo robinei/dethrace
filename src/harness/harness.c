@@ -975,6 +975,12 @@ static float scene_brightness = 1.0f;
 static float scene_lights[BR_GL_SCENE_LIGHT_FLOATS * BR_GL_MAX_SCENE_LIGHTS];
 static int scene_light_count;
 
+static float scene_shade = 1.f;
+
+void Harness_Hook_SceneShade(float shade) {
+    scene_shade = shade;
+}
+
 void Harness_Hook_SceneLighting(float brightness, const float* lights, int count) {
     scene_brightness = brightness;
     scene_light_count = 0;
@@ -985,7 +991,7 @@ void Harness_Hook_SceneLighting(float brightness, const float* lights, int count
 }
 
 int Harness_GL_SceneLighting(float* brightness, const float** lights) {
-    *brightness = scene_brightness;
+    *brightness = scene_brightness * scene_shade;
     *lights = scene_lights;
     return scene_light_count;
 }

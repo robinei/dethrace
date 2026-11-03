@@ -148,6 +148,8 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
 // Night (OpenGL mode): the 3d scenes are darkened and lit by lights (headlights, fires)
 // brightness 1 = normal; lights are BR_GL_SCENE_LIGHT_FLOATS floats each, see glrend's scene_lighting callback
 void Harness_Hook_SceneLighting(float brightness, const float* lights, int count);
+// Darken the 3d scenes begun from now on by this factor (1 = normal), on top of the scene lighting
+void Harness_Hook_SceneShade(float shade);
 // A car's texture: tail lights glow brighter while braking
 void Harness_Hook_CarLightGlow(const char* identifier, int braking);
 // Creates a directory (if it does not exist)

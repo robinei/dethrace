@@ -1719,6 +1719,13 @@ void ProcessShadow(tCar_spec* pCar, br_actor* pWorld, tTrack_spec* pTrack_spec, 
         if (f_num) {
 #ifdef DETHRACE_3DFX_PATCH
             DisableLights();
+#ifdef DETHRACE_FIX_BUGS
+            if (gShade_tables_do_not_work) {
+                // the faces' ambient (ka 0.75, above) has no effect on the unlit track faces with the lights off,
+                // so the shadow didn't show at all: darken the pass itself instead
+                Harness_Hook_SceneShade(0.75f);
+            }
+#endif
 #endif
             BrZbSceneRenderBegin(gUniverse_actor, gCamera, gRender_screen, gDepth_buffer);
 #ifdef DETHRACE_3DFX_PATCH
@@ -1745,6 +1752,9 @@ void ProcessShadow(tCar_spec* pCar, br_actor* pWorld, tTrack_spec* pTrack_spec, 
                 }
             }
             BrZbSceneRenderEnd();
+#if defined(DETHRACE_3DFX_PATCH) && defined(DETHRACE_FIX_BUGS)
+            Harness_Hook_SceneShade(1.f);
+#endif
         }
         camera_ptr->hither_z -= camera_hither_fudge;
         for (i = 0; i < f_num; i++) {
