@@ -314,6 +314,13 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_night_brightness = 0.3f;
     harness_game_config.gl_headlight_strength = 2.0f;
     harness_game_config.gl_headlight_haze = 1.0f;
+    harness_game_config.gl_ssao = 0;
+    harness_game_config.gl_ssao_strength = 0.6f;
+    harness_game_config.gl_ssao_radius = 0.35f;
+    harness_game_config.gl_speed_blur = 0;
+    harness_game_config.gl_lens_flare = 0.0f;
+    harness_game_config.gl_heat_shimmer = 0;
+    harness_game_config.gl_colour_grading = 0;
     harness_game_config.draw_distance = 1.0f;
     harness_game_config.max_detail = 0;
     harness_game_config.msaa_samples = 4;
@@ -598,6 +605,20 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_night = strcmp(value, "auto") == 0 ? 2 : (value[0] == '1');
     } else if (MATCH("General", "NightBrightness")) {
         harness_game_config.gl_night_brightness = ClampConfigFloat(atof(value), 0.0f, 1.0f);
+    } else if (MATCH("General", "SSAO")) {
+        harness_game_config.gl_ssao = (value[0] == '1');
+    } else if (MATCH("General", "SSAOStrength")) {
+        harness_game_config.gl_ssao_strength = ClampConfigFloat(atof(value), 0.0f, 1.0f);
+    } else if (MATCH("General", "SSAORadius")) {
+        harness_game_config.gl_ssao_radius = ClampConfigFloat(atof(value), 0.05f, 2.0f);
+    } else if (MATCH("General", "SpeedBlur")) {
+        harness_game_config.gl_speed_blur = (value[0] == '1');
+    } else if (MATCH("General", "LensFlare")) {
+        harness_game_config.gl_lens_flare = ClampConfigFloat(atof(value), 0.0f, 4.0f);
+    } else if (MATCH("General", "HeatShimmer")) {
+        harness_game_config.gl_heat_shimmer = (value[0] == '1');
+    } else if (MATCH("General", "ColourGrading")) {
+        harness_game_config.gl_colour_grading = (value[0] == '1');
     } else if (MATCH("General", "HeadlightHaze")) {
         harness_game_config.gl_headlight_haze = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "HeadlightStrength")) {
@@ -820,27 +841,40 @@ void Harness_Hook_Hud2dEnd(void) {
 }
 
 // Post-processing (OpenGL mode), implemented by glrend
+// must match glrend's (include/brglrend_p.h)
 typedef struct br_gl_post_params {
     float hither, yon;
     float dof_start, dof_end;
     float dof_max_radius;
     float glow_strength;
+    float flare_strength;
+    float ao_strength;
+    float ao_radius;
+    float speed;
+    float grade;
+    float night;
+    float time;
+    int shimmer_count;
+    float shimmers[4 * 8];
 } br_gl_post_params;
 br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen, br_boolean glow);
 void BR_PUBLIC_ENTRY BrGLPostProcessEnd(br_pixelmap* screen, const br_gl_post_params* params);
 
 int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
-    if (!harness_game_config.opengl_3dfx_mode || !(harness_game_config.gl_depth_of_field || harness_game_config.gl_glow) || screen == NULL) {
+    if (!harness_game_config.opengl_3dfx_mode || screen == NULL
+        || !(harness_game_config.gl_depth_of_field || harness_game_config.gl_glow || harness_game_config.gl_ssao
+            || harness_game_config.gl_speed_blur || harness_game_config.gl_heat_shimmer || harness_game_config.gl_colour_grading)) {
         return 0;
     }
     return BrGLPostProcessBegin(screen, harness_game_config.gl_glow) == BRE_OK;
 }
 
-void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon) {
+void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* fires, int fire_count) {
     br_gl_post_params params;
     int vx, vy;
     float sx, sy;
 
+    memset(&params, 0, sizeof(params));
     params.hither = hither;
     params.yon = yon;
     params.dof_start = harness_game_config.gl_dof_start * yon;
@@ -852,6 +886,17 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon) {
         params.dof_max_radius *= (2 * vy + screen->height * sy) / 1080.0f;
     }
     params.glow_strength = harness_game_config.gl_glow ? harness_game_config.gl_glow_strength : 0.0f;
+    params.flare_strength = harness_game_config.gl_glow ? harness_game_config.gl_lens_flare : 0.0f;
+    params.ao_strength = harness_game_config.gl_ssao ? harness_game_config.gl_ssao_strength : 0.0f;
+    params.ao_radius = harness_game_config.gl_ssao_radius;
+    params.speed = harness_game_config.gl_speed_blur ? speed : 0.0f;
+    params.grade = harness_game_config.gl_colour_grading ? 1.0f : 0.0f;
+    params.night = night ? 1.0f : 0.0f;
+    params.time = gHarness_platform.GetTicks != NULL ? (gHarness_platform.GetTicks() % 1000000) / 1000.0f : 0.0f;
+    if (harness_game_config.gl_heat_shimmer && fires != NULL) {
+        params.shimmer_count = fire_count < 8 ? fire_count : 8;
+        memcpy(params.shimmers, fires, sizeof(float) * 4 * params.shimmer_count);
+    }
     BrGLPostProcessEnd(screen, &params);
 }
 

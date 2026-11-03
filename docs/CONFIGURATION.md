@@ -70,6 +70,21 @@ NightBrightness = 0.3
 HeadlightStrength = 2
 HeadlightHaze = 1
 
+; Only used in 3dfx mode. More post-processing:
+; SSAO: ambient occlusion, soft contact shadows where surfaces meet (under cars, at the foot of walls).
+;   SSAOStrength 0-1, SSAORadius in world units
+; SpeedBlur: a radial blur towards the edges of the view, fading in from 70 to 150 mph
+; LensFlare: light streaks and a faint lens ghost from the glowing lights (needs Glow), strength
+; HeatShimmer: hot air wobbling above burning cars
+; ColourGrading: a gentle contrast curve and a little more saturation, cooler at night
+SSAO = 0
+SSAOStrength = 0.6
+SSAORadius = 0.35
+SpeedBlur = 0
+LensFlare = 0
+HeatShimmer = 0
+ColourGrading = 0
+
 ; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1

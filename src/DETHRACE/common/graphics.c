@@ -11,6 +11,7 @@
 #include "flicplay.h"
 #include "globvars.h"
 #include "globvrbm.h"
+#include "globvrkm.h"
 #include "globvrpb.h"
 #include "grafdata.h"
 #include "harness/config.h"
@@ -2049,6 +2050,39 @@ static void SetNightLighting(br_actor* pCamera) {
 }
 #endif
 
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: finish the post-processed 3d view, with the speed blur's speed and the fires' heat shimmer
+static void PostProcessView(void) {
+    float fires[4 * 8];
+    int fire_count;
+    int i;
+    float mph;
+    br_matrix34 to_camera;
+    br_vector3 pv;
+
+    fire_count = 0;
+    BrActorToActorMatrix34(&to_camera, gUniverse_actor, gCamera);
+    for (i = 0; i < COUNT_OF(gSmoke_column) && fire_count < 8; i++) {
+        if (!((gColumn_flags >> i) & 1) || gSmoke_column[i].colour != 0) {
+            continue;
+        }
+        BrMatrix34ApplyP(&pv, &gSmoke_column[i].pos, &to_camera);
+        if (pv.v[2] > -0.1f || BrVector3LengthSquared(&pv) > 40.f * 40.f) {
+            continue;
+        }
+        fires[4 * fire_count + 0] = pv.v[0];
+        fires[4 * fire_count + 1] = pv.v[1] + 0.05f;
+        fires[4 * fire_count + 2] = pv.v[2];
+        fires[4 * fire_count + 3] = gSmoke_column[i].lifetime < 4000 ? gSmoke_column[i].lifetime / 4000.f : 1.f;
+        fire_count++;
+    }
+    // the speed blur fades in from 70 to 150 mph
+    mph = fabsf(gCar_to_view->speedo_speed) * WORLD_SCALE / 1600.f * 3600000.f;
+    Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, ((br_camera*)gCamera->type_data)->yon_z,
+        gAction_replay_mode ? 0.f : MAX(0.f, MIN(1.f, (mph - 70.f) / 80.f)), gNight, fires, fire_count);
+}
+#endif
+
 // IDA: void __usercall RenderAFrame(int pDepth_mask_on@<EAX>)
 // FUNCTION: CARM95 0x004b59ce
 void RenderAFrame(int pDepth_mask_on) {
@@ -2301,7 +2335,7 @@ void RenderAFrame(int pDepth_mask_on) {
 #ifdef DETHRACE_3DFX_PATCH
     Harness_Hook_SceneLighting(1.f, NULL, 0);
     if (post_processing) {
-        Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, ((br_camera*)gCamera->type_data)->yon_z);
+        PostProcessView();
     }
     PDLockRealBackScreen(1);
 
