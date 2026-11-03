@@ -12,6 +12,7 @@
 #include "globvrpb.h"
 #include "graphics.h"
 #include "harness/hooks.h"
+#include "harness/config.h"
 #include "harness/trace.h"
 #include "loading.h"
 #include "opponent.h"
@@ -39,7 +40,7 @@ int gShrapnel_flags;
 br_model* gShrapnel_model[2];
 
 // GLOBAL: CARM95 0x00514a00
-int gSmoke_flags;
+tSmoke_flags gSmoke_flags;
 
 // GLOBAL: CARM95 0x00514a04
 int gSmoke_num;
@@ -77,14 +78,14 @@ br_pixelmap** gDust_table = &gShade_list[8];
 
 // GLOBAL: CARM95 0x00538618
 br_pixelmap* gFlame_map[20];
-tBRender_smoke* gBR_smoke_pointers[30];
+tBRender_smoke* gBR_smoke_pointers[BR_SMOKE_COUNT];
 
 // GLOBAL: CARM95 0x00538298
 tSplash gSplash[32];
 
 // GLOBAL: CARM95 0x00538b00
 br_material* gSplash_material[20];
-tBRender_smoke gBR_smoke_structs[30];
+tBRender_smoke gBR_smoke_structs[BR_SMOKE_COUNT];
 
 // GLOBAL: CARM95 0x00538de8
 tSmoke_column gSmoke_column[25];
@@ -100,7 +101,7 @@ br_pixelmap* gShade_list[16];
 int gN_BR_smoke_structs;
 
 // GLOBAL: CARM95 0x005386b0
-tSmoke gSmoke[25];
+tSmoke gSmoke[SMOKE_COUNT];
 
 // GLOBAL: CARM95 0x0053a0e0
 tU32 gSplash_flags;
@@ -137,7 +138,12 @@ br_matrix34 gSmoke_camera_to_world;
 #endif
 
 // gSmoke_column has 25 elements but all the code just checks the first 5 elements
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace: use all the smoke columns (fires on damaged cars), the oldest is reused when they run out
+#define MAX_SMOKE_COLUMNS COUNT_OF(gSmoke_column)
+#else
 #define MAX_SMOKE_COLUMNS 5
+#endif
 
 // Bugfix: At higher FPS, flame animation runs too quickly, so introduce a new frame timer
 #define FLAME_ANIMATION_FRAME_INTERVAL 40
@@ -146,10 +152,11 @@ br_matrix34 gSmoke_camera_to_world;
 #define SMOKE_COLUMN_NEW_PUFF_INTERVAL 30
 
 #ifdef DETHRACE_FIX_BUGS
-#define TEST_BIT(var, pos) (var & (1u << pos))
-#define SET_BIT(var, pos) (var |= (1u << pos))
-#define FLIP_BIT(var, pos) (var ^= (1u << pos))
-#define CLEAR_BIT(var, pos) (var &= ~(1u << pos))
+// 64 bit, for the smoke flags
+#define TEST_BIT(var, pos) ((var) & (1ull << (pos)))
+#define SET_BIT(var, pos) ((var) |= (1ull << (pos)))
+#define FLIP_BIT(var, pos) ((var) ^= (1ull << (pos)))
+#define CLEAR_BIT(var, pos) ((var) &= ~(1ull << (pos)))
 #else
 #define TEST_BIT(var, pos) (var & (1 << pos))
 #define SET_BIT(var, pos) (var |= (1 << pos))
@@ -1304,6 +1311,11 @@ void RecordSmokeCircle(br_vector3* pCent, br_scalar pR, br_scalar pStrength, br_
     tU8 shade_index;
     br_colour shade_rgb;
 
+#ifdef DETHRACE_FIX_BUGS
+    if (gN_BR_smoke_structs >= COUNT_OF(gBR_smoke_structs)) {
+        return;
+    }
+#endif
     if (gRendering_mirror) {
         DRMatrix34TApplyP(&gBR_smoke_structs[gN_BR_smoke_structs].pos, pCent, &gRearview_camera_to_world);
     } else {
@@ -1365,7 +1377,11 @@ void ReplaySmoke(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer, br_act
     }
 #endif
 
+#ifdef DETHRACE_FIX_BUGS
+    for (i = 0; i < COUNT_OF(gSmoke); i++) {
+#else
     for (i = 0; i < COUNT_OF(gSmoke_column); i++) {
+#endif
         if (TEST_BIT(gSmoke_flags, i)) {
             aspect = 1.0 + (gSmoke[i].radius - .05f) / .25f * .5;
             if (gSmoke[i].type & 0x10) {
@@ -1461,7 +1477,7 @@ void RenderSmoke(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer, br_act
     br_scalar aspect;
     br_scalar ts;
     tU32 seed;
-    tU32 not_lonely;
+    tSmoke_flags not_lonely;
 
 #ifdef DETHRACE_FIX_BUGS
     // Fix opponent smoke rendering in cockpit view with rearview mirror enabled
@@ -1602,14 +1618,20 @@ void CreatePuffOfSmoke(br_vector3* pos, br_vector3* v, br_scalar strength, br_sc
         return;
     }
     // if we are too far away from the current car...
+#ifdef DETHRACE_FIX_BUGS
+    // Added by dethrace: create smoke over the extended draw distance
+#define SMOKE_MAX_DISTANCE_SQUARED (625.0f * harness_game_config.draw_distance * harness_game_config.draw_distance)
+#else
+#define SMOKE_MAX_DISTANCE_SQUARED 625.0f
+#endif
     BrVector3Sub(&tv, pos, &gProgram_state.current_car.pos);
-    if (BrVector3LengthSquared(&tv) > 625.0f) {
+    if (BrVector3LengthSquared(&tv) > SMOKE_MAX_DISTANCE_SQUARED) {
         if (&gProgram_state.current_car == gCar_to_view) {
             return;
         }
         // check the distance from the car we are viewing and if it is too far away also, just return
         BrVector3Sub(&tv, pos, &gCar_to_view->pos);
-        if (BrVector3LengthSquared(&tv) > 625.0f) {
+        if (BrVector3LengthSquared(&tv) > SMOKE_MAX_DISTANCE_SQUARED) {
             return;
         }
         pipe_me = 0;

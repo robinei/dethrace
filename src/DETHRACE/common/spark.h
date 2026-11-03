@@ -3,12 +3,24 @@
 
 #include "dr_types.h"
 
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace: more smoke puffs, so trails are not cut short when more cars smoke within the extended
+// draw distance. Puffs are tracked in a bit mask, so at most 64
+#define SMOKE_COUNT 64
+#define BR_SMOKE_COUNT 256
+typedef unsigned long long tSmoke_flags;
+#else
+#define SMOKE_COUNT 25
+#define BR_SMOKE_COUNT 30
+typedef int tSmoke_flags;
+#endif
+
 extern int gNext_spark;
 extern int gSpark_flags;
 extern int gNext_shrapnel;
 extern int gShrapnel_flags;
 extern br_model* gShrapnel_model[2];
-extern int gSmoke_flags;
+extern tSmoke_flags gSmoke_flags;
 extern int gSmoke_num;
 extern int gOffset;
 extern int gColumn_flags;
@@ -22,16 +34,16 @@ extern int gIt_type;
 extern br_pixelmap* gIt_shade_table;
 extern br_pixelmap** gDust_table;
 extern br_pixelmap* gFlame_map[20];
-extern tBRender_smoke* gBR_smoke_pointers[30];
+extern tBRender_smoke* gBR_smoke_pointers[BR_SMOKE_COUNT];
 extern tSplash gSplash[32];
 extern br_material* gSplash_material[20];
-extern tBRender_smoke gBR_smoke_structs[30];
+extern tBRender_smoke gBR_smoke_structs[BR_SMOKE_COUNT];
 extern tSmoke_column gSmoke_column[25];
 extern br_matrix4 gCameraToScreen;
 extern tSpark gSparks[32];
 extern br_pixelmap* gShade_list[16];
 extern int gN_BR_smoke_structs;
-extern tSmoke gSmoke[25];
+extern tSmoke gSmoke[SMOKE_COUNT];
 extern tU32 gSplash_flags;
 extern tU32 gNext_splash;
 extern br_model* gLollipop_model;

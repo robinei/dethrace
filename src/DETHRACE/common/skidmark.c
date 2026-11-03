@@ -13,7 +13,7 @@
 #include <string.h>
 
 // GLOBAL: CARM95 0x00530190
-tSkid gSkids[100];
+tSkid gSkids[SKID_COUNT];
 
 // GLOBAL: CARM95 0x00507030
 char* gBoring_material_names[2] = { "OILSMEAR.MAT", "ROBSMEAR.MAT" };

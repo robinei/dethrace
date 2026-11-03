@@ -3,7 +3,13 @@
 
 #include "dr_types.h"
 
-extern tSkid gSkids[100];
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace: skid marks are reused oldest first; keep more of them visible over the extended draw distance
+#define SKID_COUNT 500
+#else
+#define SKID_COUNT 100
+#endif
+extern tSkid gSkids[SKID_COUNT];
 extern char* gBoring_material_names[2];
 extern char* gMaterial_names[2];
 
