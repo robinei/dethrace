@@ -168,7 +168,12 @@ static void SDL2_Harness_ProcessWindowMessages(void) {
             // Map incoming SDL scancode to PC scan code as used by game code
             int dethrace_scancode = sdl_scancode_map[event.key.keysym.scancode];
             if (dethrace_scancode == 0) {
-                LOG_WARN3("unexpected scan code %s (%d)", SDL2_GetScancodeName(event.key.keysym.scancode), event.key.keysym.scancode);
+                // once per key (eg. the Super key held for a screenshot shortcut repeats)
+                static unsigned char warned[SDL_NUM_SCANCODES];
+                if (event.key.keysym.scancode < SDL_NUM_SCANCODES && !warned[event.key.keysym.scancode]) {
+                    warned[event.key.keysym.scancode] = 1;
+                    LOG_WARN3("unexpected scan code %s (%d)", SDL2_GetScancodeName(event.key.keysym.scancode), event.key.keysym.scancode);
+                }
                 return;
             }
 
