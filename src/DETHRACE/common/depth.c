@@ -291,6 +291,119 @@ br_scalar EdgeU(br_angle pSky, br_angle pView, br_angle pPerfect) {
     return b * a / c;
 }
 
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: in OpenGL mode the sky is a part of a sphere around the camera, its image spread by
+// angle across many columns. The original's is a flat sheet with its image spread evenly across three
+// pieces: at a wide (widescreen) view the sky towards the sides turns at the wrong rate, sliding like a
+// sprite against the scenery. The rows (heights, image rows) are the original's
+#define SPHERICAL_SKY_COLUMNS 24
+#define SPHERICAL_SKY_ROWS 22
+
+static int UseSphericalSky(void) {
+    return harness_game_config.opengl_3dfx_mode;
+}
+
+static br_model* CreateSphericalHorizonModel(void) {
+    br_model* model;
+    int row;
+    int column;
+    int f;
+    int v;
+
+    model = BrModelAllocate(NULL, SPHERICAL_SKY_ROWS * (SPHERICAL_SKY_COLUMNS + 1), 2 * (SPHERICAL_SKY_ROWS - 1) * SPHERICAL_SKY_COLUMNS);
+    model->flags |= BR_MODF_KEEP_ORIGINAL;
+    f = 0;
+    for (row = 0; row < SPHERICAL_SKY_ROWS - 1; row++) {
+        for (column = 0; column < SPHERICAL_SKY_COLUMNS; column++) {
+            v = row * (SPHERICAL_SKY_COLUMNS + 1) + column;
+            model->faces[f].vertices[0] = v;
+            model->faces[f].vertices[1] = v + 1;
+            model->faces[f].vertices[2] = v + SPHERICAL_SKY_COLUMNS + 2;
+            model->faces[f + 1].vertices[0] = v;
+            model->faces[f + 1].vertices[1] = v + SPHERICAL_SKY_COLUMNS + 2;
+            model->faces[f + 1].vertices[2] = v + SPHERICAL_SKY_COLUMNS + 1;
+            model->faces[f].smoothing = model->faces[f + 1].smoothing = 1;
+            model->faces[f].material = model->faces[f + 1].material = NULL;
+            f += 2;
+        }
+    }
+    // image rows as the original's: the bottom three rows the bottom of the image, then down the image
+    // over 18 rows, the top two its top
+    for (row = 0; row < SPHERICAL_SKY_ROWS; row++) {
+        float image_v = row <= 2 ? 0.9999999f : row >= 20 ? 0.f : (float)(18 - (row - 2)) / 18.f;
+        for (column = 0; column <= SPHERICAL_SKY_COLUMNS; column++) {
+            model->vertices[row * (SPHERICAL_SKY_COLUMNS + 1) + column].map.v[1] = image_v;
+        }
+    }
+    return model;
+}
+
+static void MungeSphericalSkyModel(br_actor* pCamera, br_model* pModel) {
+    br_camera* camera_data;
+    br_scalar tan_half_fov;
+    br_scalar sky_distance;
+    br_scalar half_diag;
+    br_angle half_diag_fov;
+    br_angle min_angle;
+    br_angle angle_range;
+    float elevations[SPHERICAL_SKY_ROWS];
+    float half_span;
+    float azimuth;
+    float sky_radians;
+    int row;
+    int column;
+    br_vertex* vx;
+
+    camera_data = pCamera->type_data;
+    tan_half_fov = Tan(camera_data->field_of_view / 2);
+    sky_distance = camera_data->yon_z - 1.f;
+    half_diag = sqrtf(1.f + camera_data->aspect * camera_data->aspect) * tan_half_fov;
+    half_diag_fov = BrRadianToAngle(atan2(half_diag, 1.f));
+    // as the original: the sky fills the view (and its corners, rolled) with a margin
+    gSky_height = sky_distance * tan_half_fov * 2.f;
+    gSky_width = gSky_height * camera_data->aspect;
+    gSky_y_multiplier = CalculateWrappingMultiplier(gSky_height, camera_data->yon_z);
+    gSky_x_multiplier = CalculateWrappingMultiplier(gSky_width, camera_data->yon_z);
+
+    // the original's row heights (angles up from the horizon), below, across and above the image
+    min_angle = BR_ANGLE_DEG(-90) - half_diag_fov;
+    angle_range = -gSky_image_underground - min_angle;
+    for (row = 0; row < 2; row++) {
+        elevations[row] = BrAngleToRadian(min_angle + angle_range * row / 2);
+    }
+    min_angle = -gSky_image_underground;
+    angle_range = gSky_image_height;
+    for (row = 0; row < 18; row++) {
+        elevations[row + 2] = BrAngleToRadian(min_angle + angle_range * row / 18);
+    }
+    min_angle = gSky_image_height - gSky_image_underground;
+    angle_range = half_diag_fov + BR_ANGLE_DEG(90) - min_angle;
+    for (row = 0; row <= 1; row++) {
+        elevations[row + 20] = BrAngleToRadian(min_angle + angle_range * row);
+    }
+
+    // columns evenly by angle across the view's diagonal plus a margin, the image by angle (its width is
+    // gSky_image_width of the full turn, as the scrolling by the camera's yaw)
+    half_span = BrAngleToRadian(half_diag_fov) + 0.35f;
+    if (half_span > 3.0f) {
+        half_span = 3.0f;
+    }
+    sky_radians = BrAngleToRadian(gSky_image_width);
+    for (column = 0; column <= SPHERICAL_SKY_COLUMNS; column++) {
+        azimuth = -half_span + 2.f * half_span * column / SPHERICAL_SKY_COLUMNS;
+        for (row = 0; row < SPHERICAL_SKY_ROWS; row++) {
+            vx = &pModel->vertices[row * (SPHERICAL_SKY_COLUMNS + 1) + column];
+            // (beyond straight up or down the rows go on over the top, like the original's)
+            vx->p.v[0] = sky_distance * fabsf(cosf(elevations[row])) * sinf(azimuth);
+            vx->p.v[1] = sky_distance * sinf(elevations[row]);
+            vx->p.v[2] = -sky_distance * cosf(elevations[row]) * cosf(azimuth);
+            vx->map.v[0] = azimuth / sky_radians;
+        }
+    }
+    BrModelUpdate(pModel, BR_MODU_ALL & ~BR_MODU_FACES);
+}
+#endif
+
 // IDA: void __usercall MungeSkyModel(br_actor *pCamera@<EAX>, br_model *pModel@<EDX>)
 // FUNCTION: CARM95 0x0046280d
 void MungeSkyModel(br_actor* pCamera, br_model* pModel) {
@@ -312,6 +425,12 @@ void MungeSkyModel(br_actor* pCamera, br_model* pModel) {
     br_angle angle_range;
     br_angle angle;
 
+#ifdef DETHRACE_3DFX_PATCH
+    if (UseSphericalSky()) {
+        MungeSphericalSkyModel(pCamera, pModel);
+        return;
+    }
+#endif
     nbands = 21;
     camera_data = pCamera->type_data;
     tan_half_fov = Tan(camera_data->field_of_view / 2);
@@ -398,6 +517,11 @@ br_model* CreateHorizonModel(br_actor* pCamera) {
     tU8 stripe;
     br_model* model;
 
+#ifdef DETHRACE_3DFX_PATCH
+    if (UseSphericalSky()) {
+        return CreateSphericalHorizonModel();
+    }
+#endif
     nbands = 21;
     model = BrModelAllocate(NULL, 4 * (nbands + 1), 6 * nbands);
     model->flags |= BR_MODF_KEEP_ORIGINAL;
