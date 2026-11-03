@@ -316,7 +316,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_headlight_haze = 1.0f;
     harness_game_config.gl_ssao = 0;
     harness_game_config.gl_ssao_strength = 0.6f;
-    harness_game_config.gl_ssao_radius = 0.35f;
+    harness_game_config.gl_ssao_radius = 0.5f;
     harness_game_config.gl_speed_blur = 0;
     harness_game_config.gl_lens_flare = 0.0f;
     harness_game_config.gl_heat_shimmer = 0;

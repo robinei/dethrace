@@ -72,14 +72,15 @@ HeadlightHaze = 1
 
 ; Only used in 3dfx mode. More post-processing:
 ; SSAO: ambient occlusion, soft contact shadows where surfaces meet (under cars, at the foot of walls).
-;   SSAOStrength 0-1, above 1 (up to 4) deepens it further. SSAORadius in world units
+;   SSAOStrength 0-1, above 1 (up to 4) deepens it further.
+;   SSAORadius in world units: how far from a crease it reaches
 ; SpeedBlur: a radial blur towards the edges of the view, fading in from 70 to 150 mph
 ; LensFlare: light streaks through the glowing lights (needs Glow), strength
 ; HeatShimmer: hot air wobbling above burning cars
 ; ColourGrading: a gentle contrast curve and a little more saturation, cooler at night
 SSAO = 0
 SSAOStrength = 0.6
-SSAORadius = 0.35
+SSAORadius = 0.5
 SpeedBlur = 0
 LensFlare = 0
 HeatShimmer = 0
