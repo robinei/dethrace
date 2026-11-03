@@ -269,7 +269,7 @@ tConcussion gConcussion;
 tClip_details gShadow_clip_planes[8];
 
 // GLOBAL: CARM95 0x0053e5f8
-br_actor* gLollipops[100];
+br_actor* gLollipops[LOLLIPOP_COUNT];
 
 // GLOBAL: CARM95 0x0053f8d8
 tWobble_spec gWobble_array[5];
@@ -1808,7 +1808,12 @@ void RenderShadows(br_actor* pWorld, tTrack_spec* pTrack_spec, br_actor* pCamera
                 if (!gAction_replay_mode) {
                     BrVector3Sub(&camera_to_car, (br_vector3*)gCamera_to_world.m[3], &the_car->car_master_actor->t.t.translate.t);
                     distance_factor = BrVector3LengthSquared(&camera_to_car);
+#ifdef DETHRACE_FIX_BUGS
+                    // Added by dethrace: draw shadows further away with the extended draw distance
+                    if (distance_factor > SHADOW_MAX_RENDER_DISTANCE * harness_game_config.draw_distance * harness_game_config.draw_distance) {
+#else
                     if (distance_factor > SHADOW_MAX_RENDER_DISTANCE) {
+#endif
                         continue;
                     }
                 }

@@ -15,6 +15,7 @@
 #include "globvrbm.h"
 #include "globvrpb.h"
 #include "graphics.h"
+#include "harness/config.h"
 #include "harness/trace.h"
 #include "input.h"
 #include "loading.h"
@@ -3920,7 +3921,13 @@ void GrooveThisDelic(tGroovidelic_spec* pGroove, tU32 pTime, int pInterrupt_it) 
     the_actor = pGroove->actor;
     pGroove->done_this_frame = 1;
     CalcActorGlobalPos(&actor_pos, the_actor);
+#ifdef DETHRACE_FIX_BUGS
+    // Added by dethrace: animate nearby objects over the extended draw distance (they only move when this
+    // close, and would otherwise be seen standing still further away)
+    if (PointOutOfSight(&actor_pos, pGroove->mode == eGroove_mode_distance ? gYon_squared : 36.f * harness_game_config.draw_distance * harness_game_config.draw_distance)) {
+#else
     if (PointOutOfSight(&actor_pos, pGroove->mode == eGroove_mode_distance ? gYon_squared : 36.f)) {
+#endif
         return;
     }
 

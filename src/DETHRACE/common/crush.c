@@ -6,6 +6,7 @@
 #include "globvrkm.h"
 #include "globvrpb.h"
 #include "graphics.h"
+#include "harness/config.h"
 #include "harness/trace.h"
 #include "loading.h"
 #include "mainloop.h"
@@ -1321,7 +1322,12 @@ void DoWheelDamage(tU32 pFrame_period) {
                     old_offset = car->wheel_dam_offset[j];
                     damage = car->damage_units[j + 8].damage_level;
                     if (damage > 30 && !gRace_finished) {
+#ifdef DETHRACE_FIX_BUGS
+                        // Added by dethrace: wobble damaged wheels over the extended draw distance
+                        if (PointOutOfSight(&car->pos, 32.0f * harness_game_config.draw_distance * harness_game_config.draw_distance)) {
+#else
                         if (PointOutOfSight(&car->pos, 32.0f)) {
+#endif
                             break;
                         }
                         y_amount = (damage - 30) * gWobble_spam_y[damage & 7];
