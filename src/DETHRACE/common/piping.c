@@ -528,14 +528,21 @@ void AddDataToSession(int pSubject_index, void* pData, tU32 pData_length) {
     int variable_for_breaking_on;
 
     if (gPipe_buffer_start != NULL && !gAction_replay_mode && gProgram_state.racing) {
+#ifdef DETHRACE_FIX_BUGS
+        // A session holds at most 255 chunks (and LOCAL_BUFFER_SIZE bytes). With the extended draw distance
+        // there can be more active pedestrians than that, which was fatal ("Something in the piping system
+        // went odd"): carry on in a new session of the same type instead. Sessions are replayed one by one.
+        if (((tPipe_session*)gLocal_buffer)->number_of_chunks == 255
+            || (((tPipe_session*)gLocal_buffer)->number_of_chunks != 0
+                && pData_length + gLocal_buffer_size + offsetof(tPipe_chunk, chunk_data) >= LOCAL_BUFFER_SIZE)) {
+            tPipe_chunk_type type = ((tPipe_session*)gLocal_buffer)->chunk_type;
+            dr_dprintf("Piping session %s full, continuing in a new one", get_pipe_chunk_type_name(type));
+            EndPipingSession2(0);
+            StartPipingSession2(type, 0);
+        }
+#endif
         temp_buffer_size = pData_length + (gLocal_buffer_size + offsetof(tPipe_chunk, chunk_data));
         if (temp_buffer_size < LOCAL_BUFFER_SIZE) {
-#ifdef DETHRACE_FIX_BUGS
-            int amount = ((tPipe_session*)gLocal_buffer)->number_of_chunks;
-            if (255 - amount < 3) {
-                LOG_WARN("Piping session has only %d remaining chunks, type=%s (%d)", 255 - amount, get_pipe_chunk_type_name(((tPipe_session*)gLocal_buffer)->chunk_type), ((tPipe_session*)gLocal_buffer)->chunk_type);
-            }
-#endif
             REPLAY_DEBUG_ASSERT(((tPipe_session*)gLocal_buffer)->pipe_magic1 == REPLAY_DEBUG_SESSION_MAGIC1);
             ((tPipe_session*)gLocal_buffer)->number_of_chunks++;
             PIPING_REQUIRE(((tPipe_session*)gLocal_buffer)->number_of_chunks != 0);
