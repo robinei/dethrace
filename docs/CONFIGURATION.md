@@ -90,7 +90,7 @@ ColourGrading = 0
 ; SurfaceVariation: a subtle large scale brightness variation (patches several metres across), 1 = about +-7%
 ; SunShading: surfaces turned away from a high sun darker (walls facing away up to about 25%), off at night
 ; Haze: on tracks without fog or darkness, the distance takes on a little of the sky's colour near the horizon
-;   (aerial perspective, nothing blurs), 1 = up to about 25% by the draw distance; off at night
+;   (aerial perspective, nothing blurs), 1 = about 30% by the original draw distance, at most 35%; off at night
 SurfaceVariation = 0
 SunShading = 0
 Haze = 0

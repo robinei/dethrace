@@ -1026,7 +1026,7 @@ void Harness_Hook_SceneSurface(const float* sun, const float* up, int night, con
         scene_surface[8] = haze_colour[0];
         scene_surface[9] = haze_colour[1];
         scene_surface[10] = haze_colour[2];
-        scene_surface[11] = 0.25f * harness_game_config.gl_haze;
+        scene_surface[11] = 0.35f * harness_game_config.gl_haze;
     } else {
         scene_surface[11] = 0.f;
     }
