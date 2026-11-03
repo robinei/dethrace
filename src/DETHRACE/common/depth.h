@@ -97,6 +97,8 @@ void SetYon(br_scalar pYon);
 
 br_scalar GetYon(void);
 
+br_scalar RenderYon(br_scalar pYon);
+
 void IncreaseAngle(void);
 
 void DecreaseAngle(void);

@@ -322,6 +322,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_heat_shimmer = 0;
     harness_game_config.gl_colour_grading = 0;
     harness_game_config.draw_distance = 1.0f;
+    harness_game_config.draw_everything = 0;
     harness_game_config.max_detail = 0;
     harness_game_config.msaa_samples = 4;
     harness_game_config.supersampling = 0;
@@ -550,6 +551,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         if (harness_game_config.draw_distance < 1.0f) {
             harness_game_config.draw_distance = 1.0f;
         }
+    } else if (MATCH("General", "DrawEverything")) {
+        harness_game_config.draw_everything = (value[0] == '1');
     } else if (MATCH("General", "MaxDetail")) {
         harness_game_config.max_detail = (value[0] == '1');
     } else if (MATCH("General", "TextureUpscaler")) {

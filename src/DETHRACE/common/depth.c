@@ -816,7 +816,15 @@ void DoHorizon(br_pixelmap* pRender_buffer, br_pixelmap* pDepth_buffer, br_actor
         gHorizon_material->map_transform.m[2][1] = 0.f;
         BrMaterialUpdate(gHorizon_material, BR_MATU_ALL);
         actor->render_style = BR_RSTYLE_FACES;
+#ifdef DETHRACE_3DFX_PATCH
+        // Added by dethrace: the sky moves with the camera, so no surface shading (sun, variation) on it; and it
+        // leaves the depth alone, so the ambient occlusion doesn't shade the folds between its bands
+        Harness_Hook_DrawingSky(1);
+#endif
         BrZbSceneRenderAdd(actor);
+#ifdef DETHRACE_3DFX_PATCH
+        Harness_Hook_DrawingSky(0);
+#endif
         actor->render_style = BR_RSTYLE_NONE;
     }
 }
@@ -940,15 +948,7 @@ void DoDrugWobbleCamera(br_actor* pCamera) {
     // GLOBAL: CARM95 0x513490
     static br_scalar mag10 = 0.2f;
     // GLOBAL: CARM95 0x513494
-#ifdef DETHRACE_3DFX_PATCH
-        // Added by dethrace: the sky moves with the camera, so no surface shading (sun, variation) on it; and it
-        // leaves the depth alone, so the ambient occlusion doesn't shade the folds between its bands
-        Harness_Hook_DrawingSky(1);
-#endif
     static br_scalar mag11 = 0.07;
-#ifdef DETHRACE_3DFX_PATCH
-        Harness_Hook_DrawingSky(0);
-#endif
     // GLOBAL: CARM95 0x513498
     static br_scalar mag12 = 0.03f;
     // GLOBAL: CARM95 0x51349c
@@ -1067,7 +1067,7 @@ void AssertYons(void) {
 
     for (i = 0; i < COUNT_OF(gCamera_list); ++i) {
         camera_ptr = gCamera_list[i]->type_data;
-        camera_ptr->yon_z = gYon_multiplier * gCamera_yon;
+        camera_ptr->yon_z = RenderYon(gYon_multiplier * gCamera_yon);
     }
 }
 
@@ -1118,10 +1118,21 @@ void SetYon(br_scalar pYon) {
     for (i = 0; i < BR_ASIZE(gCamera_list); i++) {
         if (gCamera_list[i]) {
             camera_ptr = gCamera_list[i]->type_data;
-            camera_ptr->yon_z = pYon;
+            camera_ptr->yon_z = RenderYon(pYon);
         }
     }
     gCamera_yon = pYon;
+}
+
+// Added by dethrace: the cameras' yon (far plane) for a yon distance. With DrawEverything, far enough for
+// any track; gCamera_yon (which the fog and the effects' ranges go by) is unaffected
+br_scalar RenderYon(br_scalar pYon) {
+#ifdef DETHRACE_FIX_BUGS
+    if (harness_game_config.draw_everything && pYon < 3000.f) {
+        return 3000.f;
+    }
+#endif
+    return pYon;
 }
 
 // IDA: br_scalar __cdecl GetYon()

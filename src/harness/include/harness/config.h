@@ -86,6 +86,7 @@ typedef struct tHarness_game_config {
 
     // Multiplier for the draw distance chosen in the game's options
     float draw_distance;
+    int draw_everything;
     // Always draw the track up to the full draw distance and use the most detailed car models
     int max_detail;
     int msaa_samples;

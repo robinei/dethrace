@@ -124,6 +124,10 @@ GamepadSteeringSpeed = 60
 ; Multiply the draw distance chosen in the game's options. Fog and darkness move out with it
 DrawDistance = 1
 
+; Draw everything, however far (the whole track): no far edge for things to pop in at. The fog, and the ranges of
+; pedestrians, smoke and shadows, still go by the draw distance (and DrawDistance)
+DrawEverything = 0
+
 ; Always draw the track up to the full draw distance (whatever the "track detail" option says),
 ; and always use the most detailed car models
 MaxDetail = 0

@@ -2128,7 +2128,8 @@ static void PostProcessView(void) {
     }
     // the speed blur fades in from 70 to 150 mph
     mph = fabsf(gCar_to_view->speedo_speed) * WORLD_SCALE / 1600.f * 3600000.f;
-    Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, ((br_camera*)gCamera->type_data)->yon_z,
+    // (the draw distance, which the depth of field goes by, not the far plane, which DrawEverything moves out)
+    Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, MIN(((br_camera*)gCamera->type_data)->yon_z, gYon_multiplier * gCamera_yon),
         gAction_replay_mode ? 0.f : MAX(0.f, MIN(1.f, (mph - 70.f) / 80.f)), gNight, fires, fire_count);
 }
 #endif
