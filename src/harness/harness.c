@@ -300,6 +300,10 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_widescreen_hud = 1;
     harness_game_config.gl_distance_fog = 1;
     harness_game_config.gl_distance_fade = 0.8f;
+    harness_game_config.gl_depth_of_field = 0;
+    harness_game_config.gl_dof_start = 0.4f;
+    harness_game_config.gl_dof_end = 1.0f;
+    harness_game_config.gl_dof_strength = 3.0f;
     harness_game_config.draw_distance = 1.0f;
     harness_game_config.max_detail = 0;
     harness_game_config.msaa_samples = 4;
@@ -571,6 +575,14 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_widescreen_hud = (value[0] == '1');
     } else if (MATCH("General", "DistanceFog")) {
         harness_game_config.gl_distance_fog = (value[0] == '1');
+    } else if (MATCH("General", "DepthOfField")) {
+        harness_game_config.gl_depth_of_field = (value[0] == '1');
+    } else if (MATCH("General", "DepthOfFieldStart")) {
+        harness_game_config.gl_dof_start = ClampConfigFloat(atof(value), 0.0f, 1.0f);
+    } else if (MATCH("General", "DepthOfFieldEnd")) {
+        harness_game_config.gl_dof_end = ClampConfigFloat(atof(value), 0.01f, 1.0f);
+    } else if (MATCH("General", "DepthOfFieldStrength")) {
+        harness_game_config.gl_dof_strength = ClampConfigFloat(atof(value), 0.0f, 20.0f);
     } else if (MATCH("General", "DistanceFade")) {
         harness_game_config.gl_distance_fade = ClampConfigFloat(atof(value), 0.0f, 0.99f);
     } else if (MATCH("General", "PhysicsPerFrame")) {
@@ -782,6 +794,40 @@ float Harness_Hook_Hud2dBegin(float* x_offset) {
 
 void Harness_Hook_Hud2dEnd(void) {
     hud_2d_wide = 0;
+}
+
+// Post-processing (OpenGL mode), implemented by glrend
+typedef struct br_gl_post_params {
+    float hither, yon;
+    float dof_start, dof_end;
+    float dof_max_radius;
+} br_gl_post_params;
+br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen);
+void BR_PUBLIC_ENTRY BrGLPostProcessEnd(br_pixelmap* screen, const br_gl_post_params* params);
+
+int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
+    if (!harness_game_config.opengl_3dfx_mode || !harness_game_config.gl_depth_of_field || screen == NULL) {
+        return 0;
+    }
+    return BrGLPostProcessBegin(screen) == BRE_OK;
+}
+
+void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon) {
+    br_gl_post_params params;
+    int vx, vy;
+    float sx, sy;
+
+    params.hither = hither;
+    params.yon = yon;
+    params.dof_start = harness_game_config.gl_dof_start * yon;
+    params.dof_end = (harness_game_config.gl_dof_end > harness_game_config.gl_dof_start + 0.01f ? harness_game_config.gl_dof_end : harness_game_config.gl_dof_start + 0.01f) * yon;
+    // strength is the blur radius in pixels at 1080p
+    params.dof_max_radius = harness_game_config.gl_dof_strength;
+    if (gHarness_platform.GetViewport != NULL) {
+        gHarness_platform.GetViewport(&vx, &vy, &sx, &sy);
+        params.dof_max_radius *= (2 * vy + screen->height * sy) / 1080.0f;
+    }
+    BrGLPostProcessEnd(screen, &params);
 }
 
 static int distance_fade_on;

@@ -66,6 +66,10 @@ typedef struct tHarness_game_config {
     int gl_widescreen_hud;
     int gl_distance_fog;
     float gl_distance_fade;
+    int gl_depth_of_field;
+    float gl_dof_start;
+    float gl_dof_end;
+    float gl_dof_strength;
 
     // Multiplier for the draw distance chosen in the game's options
     float draw_distance;

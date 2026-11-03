@@ -1928,6 +1928,7 @@ void RenderAFrame(int pDepth_mask_on) {
     br_scalar old_aspect;
     br_angle old_fov;
     int fade_to_sky;
+    int post_processing;
 #endif
 
 #ifdef DETHRACE_FIX_BUGS
@@ -2077,6 +2078,8 @@ void RenderAFrame(int pDepth_mask_on) {
 #endif
 
 #ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: render the 3d view offscreen for post-processing effects (depth of field)
+    post_processing = !gMap_mode && Harness_Hook_PostProcessBegin(gScreen);
     if (!ConditionallyFillWithSky(gRender_screen->width == gBack_screen->width ? gBack_screen : gRender_screen)
 #else
     if (!ConditionallyFillWithSky(gRender_screen)
@@ -2140,6 +2143,9 @@ void RenderAFrame(int pDepth_mask_on) {
 #endif
     }
 #ifdef DETHRACE_3DFX_PATCH
+    if (post_processing) {
+        Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, ((br_camera*)gCamera->type_data)->yon_z);
+    }
     PDLockRealBackScreen(1);
 
     // Added by dethrace

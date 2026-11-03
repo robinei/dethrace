@@ -139,6 +139,11 @@ void Harness_Hook_Hud2dEnd(void);
 // with the sky drawn first so the geometry fades into it
 void Harness_Hook_DistanceFade(int on);
 
+// Post-processing of the 3d view (OpenGL mode, depth of field). Begin returns whether it is in effect;
+// End is then called with the view camera's depth range
+int Harness_Hook_PostProcessBegin(br_pixelmap* screen);
+void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon);
+
 // glrend callbacks
 float Harness_GL_DistanceFade(void);
 int Harness_GL_OverlayRegions(const float** regions);

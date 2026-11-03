@@ -47,6 +47,14 @@ DistanceFog = 1
 ; of the draw distance onwards, instead of it popping in at the far edge. 0 disables
 DistanceFade = 0.8
 
+; Only used in 3dfx mode. Depth of field: the distance blurs, nearer things stay sharp. The blur starts at
+; DepthOfFieldStart and is strongest at DepthOfFieldEnd (fractions of the draw distance). The strength is the
+; strongest blur radius in pixels at 1080p (scaled with the window height)
+DepthOfField = 0
+DepthOfFieldStart = 0.4
+DepthOfFieldEnd = 1
+DepthOfFieldStrength = 3
+
 ; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1
