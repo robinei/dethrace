@@ -338,6 +338,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_pedestrian_shadows = 0;
     harness_game_config.gl_surface_variation = 0.f;
     harness_game_config.gl_sun_shading = 0.f;
+    harness_game_config.gl_haze = 0.f;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -588,6 +589,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         }
     } else if (MATCH("General", "SurfaceVariation")) {
         harness_game_config.gl_surface_variation = ClampConfigFloat(atof(value), 0.0f, 4.0f);
+    } else if (MATCH("General", "Haze")) {
+        harness_game_config.gl_haze = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "SunShading")) {
         harness_game_config.gl_sun_shading = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "PedestrianShadows")) {
@@ -1008,9 +1011,9 @@ void Harness_Hook_SceneShade(float shade) {
     scene_shade = shade;
 }
 
-static float scene_surface[8];
+static float scene_surface[16];
 
-void Harness_Hook_SceneSurface(const float* sun, const float* up, int night) {
+void Harness_Hook_SceneSurface(const float* sun, const float* up, int night, const float* haze_colour, float haze_distance) {
     scene_surface[0] = sun[0];
     scene_surface[1] = sun[1];
     scene_surface[2] = sun[2];
@@ -1019,6 +1022,15 @@ void Harness_Hook_SceneSurface(const float* sun, const float* up, int night) {
     scene_surface[5] = up[1];
     scene_surface[6] = up[2];
     scene_surface[7] = harness_game_config.gl_surface_variation;
+    if (haze_colour != NULL && !night && harness_game_config.gl_haze > 0.f) {
+        scene_surface[8] = haze_colour[0];
+        scene_surface[9] = haze_colour[1];
+        scene_surface[10] = haze_colour[2];
+        scene_surface[11] = 0.25f * harness_game_config.gl_haze;
+    } else {
+        scene_surface[11] = 0.f;
+    }
+    scene_surface[12] = haze_distance;
 }
 
 static int drawing_sky;
@@ -1036,7 +1048,7 @@ int Harness_GL_SceneSurface(float* params) {
         return 0;
     }
     memcpy(params, scene_surface, sizeof(scene_surface));
-    return scene_surface[3] > 0.f || scene_surface[7] > 0.f;
+    return scene_surface[3] > 0.f || scene_surface[7] > 0.f || scene_surface[11] > 0.f;
 }
 
 void Harness_Hook_SceneLighting(float brightness, const float* lights, int count) {

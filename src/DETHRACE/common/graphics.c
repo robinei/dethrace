@@ -2090,7 +2090,12 @@ static void SetNightLighting(br_actor* pCamera) {
         up_f[0] = dv.v[0];
         up_f[1] = dv.v[1];
         up_f[2] = dv.v[2];
-        Harness_Hook_SceneSurface(sun_f, up_f, gNight);
+        {
+            // aerial perspective on tracks without fog or darkness, most of it by the draw distance
+            float haze[3];
+            int hazy = gProgram_state.current_depth_effect.type == eDepth_effect_none && GetSkyHazeColour(haze);
+            Harness_Hook_SceneSurface(sun_f, up_f, gNight, hazy ? haze : NULL, gYon_multiplier * gCamera_yon);
+        }
     }
     if (gNight) {
         Harness_Hook_SceneLighting(harness_game_config.gl_night_brightness, lights, count);

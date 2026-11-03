@@ -99,6 +99,10 @@ br_scalar GetYon(void);
 
 br_scalar RenderYon(br_scalar pYon);
 
+#ifdef DETHRACE_3DFX_PATCH
+int GetSkyHazeColour(float* pRGB);
+#endif
+
 void IncreaseAngle(void);
 
 void DecreaseAngle(void);

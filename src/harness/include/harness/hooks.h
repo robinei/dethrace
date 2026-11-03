@@ -165,7 +165,8 @@ int Harness_Hook_Night(int pDarkness);
 int Harness_GL_SceneLighting(float* brightness, const float** lights);
 // The sun and up directions in the camera's space, for the sun shading and surface variation of the unlit
 // surfaces (see glrend's scene_surface callback)
-void Harness_Hook_SceneSurface(const float* sun, const float* up, int night);
+// haze_colour: NULL for no haze (on tracks with fog or darkness)
+void Harness_Hook_SceneSurface(const float* sun, const float* up, int night, const float* haze_colour, float haze_distance);
 int Harness_GL_SceneSurface(float* params);
 // While drawing the sky (which moves with the camera): no surface shading, and no depth written, so the
 // effects reading depth (ambient occlusion, depth of field) take it for infinitely far

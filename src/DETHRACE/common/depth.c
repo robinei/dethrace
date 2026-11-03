@@ -1,4 +1,5 @@
 #include "depth.h"
+#include "graphics.h"
 
 #include "brender.h"
 #include "displays.h"
@@ -1123,6 +1124,63 @@ void SetYon(br_scalar pYon) {
     }
     gCamera_yon = pYon;
 }
+
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: the haze colour for the aerial perspective: the sky image's average just above its
+// horizon. 0 without a sky
+int GetSkyHazeColour(float* pRGB) {
+    static br_pixelmap* cached_map;
+    static float cached[3];
+    br_pixelmap* map;
+    br_colour* palette;
+    br_colour c;
+    int horizon;
+    int x;
+    int y;
+    int y0;
+    float sum[3];
+    int n;
+
+    map = gProgram_state.current_depth_effect.sky_texture;
+    if (map == NULL || map->type != BR_PMT_INDEX_8 || map->pixels == NULL || gRender_palette == NULL || gRender_palette->pixels == NULL
+        || gSky_image_height == 0) {
+        return 0;
+    }
+    if (map != cached_map) {
+        palette = (br_colour*)gRender_palette->pixels;
+        horizon = map->height - gSky_image_underground * map->height / gSky_image_height;
+        if (horizon > map->height) {
+            horizon = map->height;
+        }
+        y0 = horizon - map->height / 5;
+        if (y0 < 0) {
+            y0 = 0;
+        }
+        sum[0] = sum[1] = sum[2] = 0.f;
+        n = 0;
+        for (y = y0; y < horizon; y++) {
+            for (x = 0; x < map->width; x++) {
+                c = palette[((tU8*)map->pixels)[y * map->row_bytes + x]];
+                sum[0] += BR_RED(c);
+                sum[1] += BR_GRN(c);
+                sum[2] += BR_BLU(c);
+                n++;
+            }
+        }
+        if (n == 0) {
+            return 0;
+        }
+        cached[0] = sum[0] / n / 255.f;
+        cached[1] = sum[1] / n / 255.f;
+        cached[2] = sum[2] / n / 255.f;
+        cached_map = map;
+    }
+    pRGB[0] = cached[0];
+    pRGB[1] = cached[1];
+    pRGB[2] = cached[2];
+    return 1;
+}
+#endif
 
 // Added by dethrace: the cameras' yon (far plane) for a yon distance. With DrawEverything, far enough for
 // any track; gCamera_yon (which the fog and the effects' ranges go by) is unaffected
