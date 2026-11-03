@@ -86,6 +86,12 @@ LensFlare = 0
 HeatShimmer = 0
 ColourGrading = 0
 
+; Only used in 3dfx mode. Break up the flat, tiled track and scenery:
+; SurfaceVariation: a subtle large scale brightness variation (patches several metres across), 1 = about +-4%
+; SunShading: surfaces turned away from a high sun darker (walls facing away up to about 25%), off at night
+SurfaceVariation = 0
+SunShading = 0
+
 ; Only used in 3dfx mode. Soft round shadows on the ground under the pedestrians nearby
 PedestrianShadows = 0
 

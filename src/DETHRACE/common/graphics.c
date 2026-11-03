@@ -2071,6 +2071,27 @@ static void SetNightLighting(br_actor* pCamera) {
             count = AddSceneLight(lights, count, &feet[i], -t, &up, 0.45f, 0.f, 0.f, 0.f, 0.f);
         }
     }
+    {
+        // the sun high in a fixed (world) direction, for the sun shading of the scenery
+        float sun_f[3];
+        float up_f[3];
+
+        BrActorToActorMatrix34(&to_camera, gUniverse_actor, pCamera);
+        BrVector3Set(&d, 0.45f, 0.8f, 0.4f);
+        BrVector3Normalise(&d, &d);
+        BrMatrix34ApplyV(&dv, &d, &to_camera);
+        BrVector3Normalise(&dv, &dv);
+        sun_f[0] = dv.v[0];
+        sun_f[1] = dv.v[1];
+        sun_f[2] = dv.v[2];
+        BrVector3Set(&d, 0.f, 1.f, 0.f);
+        BrMatrix34ApplyV(&dv, &d, &to_camera);
+        BrVector3Normalise(&dv, &dv);
+        up_f[0] = dv.v[0];
+        up_f[1] = dv.v[1];
+        up_f[2] = dv.v[2];
+        Harness_Hook_SceneSurface(sun_f, up_f, gNight);
+    }
     if (gNight) {
         Harness_Hook_SceneLighting(harness_game_config.gl_night_brightness, lights, count);
     } else {

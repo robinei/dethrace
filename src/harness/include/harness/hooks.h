@@ -163,6 +163,10 @@ int Harness_Hook_Night(int pDarkness);
 
 // glrend callbacks
 int Harness_GL_SceneLighting(float* brightness, const float** lights);
+// The sun and up directions in the camera's space, for the sun shading and surface variation of the unlit
+// surfaces (see glrend's scene_surface callback)
+void Harness_Hook_SceneSurface(const float* sun, const float* up, int night);
+int Harness_GL_SceneSurface(float* params);
 float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indices, const short** rects, int* rect_count, int* id);
 float Harness_GL_GlowScale(int id);
 float Harness_GL_DistanceFade(void);

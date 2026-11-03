@@ -335,6 +335,8 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.fov_scale = 1.f;
     harness_game_config.camera_smoothing = 0.f;
     harness_game_config.gl_pedestrian_shadows = 0;
+    harness_game_config.gl_surface_variation = 0.f;
+    harness_game_config.gl_sun_shading = 0.f;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -581,6 +583,10 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         if (harness_game_config.fov_scale < 0.5f || harness_game_config.fov_scale > 2.5f) {
             harness_game_config.fov_scale = 1.f;
         }
+    } else if (MATCH("General", "SurfaceVariation")) {
+        harness_game_config.gl_surface_variation = ClampConfigFloat(atof(value), 0.0f, 4.0f);
+    } else if (MATCH("General", "SunShading")) {
+        harness_game_config.gl_sun_shading = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "PedestrianShadows")) {
         harness_game_config.gl_pedestrian_shadows = (value[0] == '1');
     } else if (MATCH("General", "CameraSmoothing")) {
@@ -997,6 +1003,24 @@ static float scene_shade = 1.f;
 
 void Harness_Hook_SceneShade(float shade) {
     scene_shade = shade;
+}
+
+static float scene_surface[8];
+
+void Harness_Hook_SceneSurface(const float* sun, const float* up, int night) {
+    scene_surface[0] = sun[0];
+    scene_surface[1] = sun[1];
+    scene_surface[2] = sun[2];
+    scene_surface[3] = night ? 0.f : harness_game_config.gl_sun_shading;
+    scene_surface[4] = up[0];
+    scene_surface[5] = up[1];
+    scene_surface[6] = up[2];
+    scene_surface[7] = harness_game_config.gl_surface_variation;
+}
+
+int Harness_GL_SceneSurface(float* params) {
+    memcpy(params, scene_surface, sizeof(scene_surface));
+    return scene_surface[3] > 0.f || scene_surface[7] > 0.f;
 }
 
 void Harness_Hook_SceneLighting(float brightness, const float* lights, int count) {
