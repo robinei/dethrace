@@ -90,6 +90,10 @@ ColourGrading = 0
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1
 
+; Only used in the external view. How softly (seconds) the camera follows the car's turns, so knocks and spins
+; swing the view instead of jerking it. 0 = rigidly, as the original. 0.2 is a gentle lag
+CameraSmoothing = 0
+
 ; Only used in 3dfx mode. 1 = vsync on, 0 = off, adaptive = vsync, but a frame that is late is shown
 ; immediately (may tear briefly) instead of waiting a whole refresh. Variable refresh rate displays work with 1
 VSync = 1

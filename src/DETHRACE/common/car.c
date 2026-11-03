@@ -5599,6 +5599,42 @@ void RestoreCameraPosition(int i) {
     gSave_camera[i].saved = 0;
 }
 
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace: the external camera turns with the car at once (the swing the original allows per
+// frame is only limited by the car's own rate of turn), so knocks and spins jerk the view. Ease the
+// direction the camera looks from towards the one the original logic wants, with the configured time
+// constant. pFollow: only track the direction (the camera is placed otherwise), pSnap: jump to it
+static void SmoothCameraDirection(br_vector3* pDirection, tU32 pTime, int pFollow, int pSnap) {
+    static br_vector3 smoothed;
+    static int valid;
+    float tau = harness_game_config.camera_smoothing;
+    float angle;
+    float k;
+
+    if (tau <= 0.f || pFollow || pSnap || !valid || pTime >= 1000) {
+        BrVector3Copy(&smoothed, pDirection);
+        valid = tau > 0.f;
+        return;
+    }
+    // the signed angle from the smoothed direction to the wanted one, in the ground plane
+    angle = atan2f(smoothed.v[2] * pDirection->v[0] - smoothed.v[0] * pDirection->v[2],
+        smoothed.v[0] * pDirection->v[0] + smoothed.v[2] * pDirection->v[2]);
+    if (fabsf(angle) > 2.6f) {
+        // turned right round (a recovery, or the view swapping ends): don't sweep through
+        BrVector3Copy(&smoothed, pDirection);
+        return;
+    }
+    k = 1.f - expf(-(float)pTime / 1000.f / tau);
+    angle *= 1.f - k;
+    // the wanted direction, turned back by what remains of the angle
+    smoothed.v[0] = pDirection->v[0] * cosf(angle) + pDirection->v[2] * sinf(angle);
+    smoothed.v[1] = 0.f;
+    smoothed.v[2] = pDirection->v[2] * cosf(angle) - pDirection->v[0] * sinf(angle);
+    BrVector3Normalise(&smoothed, &smoothed);
+    BrVector3Copy(pDirection, &smoothed);
+}
+#endif
+
 // IDA: void __usercall NormalPositionExternalCamera(tCar_spec *c@<EAX>, tU32 pTime@<EDX>)
 // FUNCTION: CARM95 0x00489553
 void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
@@ -5657,9 +5693,16 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
                 gCamera_sign = 0;
             }
             SwingCamera(c, m1, m2, &vn, pTime);
+#ifdef DETHRACE_FIX_BUGS
+            // the original's own state keeps the direction it wants; only the camera is placed from the eased one
+            BrVector3Copy(&gView_direction, &vn);
+            SmoothCameraDirection(&vn, pTime, 0, manual_swing || manual_zoom || gCamera_reset || gCar_flying);
+#endif
             BrVector3Scale(&tv, &vn, dist);
             BrVector3Sub((br_vector3*)m2->m[3], &c->pos, &tv);
+#ifndef DETHRACE_FIX_BUGS
             BrVector3Copy(&gView_direction, &vn);
+#endif
         }
         if (gCamera_mode == 1) {
             if (manual_swing || manual_zoom) {
@@ -5673,6 +5716,9 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
             }
             BrVector3Normalise(&vn, &tv);
             BrVector3Copy(&gView_direction, &vn);
+#ifdef DETHRACE_FIX_BUGS
+            SmoothCameraDirection(&vn, pTime, 1, 0);
+#endif
             BrVector3Scale(&vn, &vn, -dist);
             BrVector3Accumulate(&tv, &vn);
             ts2 = BrVector3Length(&tv);

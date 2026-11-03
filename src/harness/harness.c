@@ -333,6 +333,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gamepad_steering_curve = 2.5f;
     harness_game_config.gamepad_steering_speed = 60.f;
     harness_game_config.fov_scale = 1.f;
+    harness_game_config.camera_smoothing = 0.f;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -579,6 +580,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         if (harness_game_config.fov_scale < 0.5f || harness_game_config.fov_scale > 2.5f) {
             harness_game_config.fov_scale = 1.f;
         }
+    } else if (MATCH("General", "CameraSmoothing")) {
+        harness_game_config.camera_smoothing = ClampConfigFloat(atof(value), 0.0f, 1.0f);
     } else if (MATCH("General", "Supersampling")) {
         harness_game_config.supersampling = (value[0] == '1');
     } else if (MATCH("General", "MSAA")) {
