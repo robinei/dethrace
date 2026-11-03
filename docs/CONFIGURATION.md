@@ -62,10 +62,13 @@ GlowStrength = 0.7
 
 ; Only used in 3dfx mode. Night: everything is darkened to NightBrightness, except light sources (lit windows,
 ; neon, lamps... from the glow table), and the cars' headlights light the road and whatever is ahead of them.
-; auto = on the tracks with the darkness depth cue (most of which have night skies), 1 = always, 0 = never
+; auto = on the tracks with the darkness depth cue (most of which have night skies), 1 = always, 0 = never.
+; Burning cars light their surroundings too. HeadlightHaze: how much the headlight beams show in the air
+; (more in fog). With Glow on, tail lights glow brighter while a car brakes, day and night
 Night = auto
 NightBrightness = 0.3
 HeadlightStrength = 2
+HeadlightHaze = 1
 
 ; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
 ; degrees wider. The cockpit view is unchanged

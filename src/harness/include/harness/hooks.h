@@ -144,9 +144,11 @@ void Harness_Hook_DistanceFade(int on);
 int Harness_Hook_PostProcessBegin(br_pixelmap* screen);
 void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon);
 
-// Night (OpenGL mode): while on, the 3d scenes are darkened and lit by `count` spot lights (headlights) of
-// 8 floats: camera space position, range, camera space direction and strength
-void Harness_Hook_SceneLighting(int on, const float* lights, int count);
+// Night (OpenGL mode): the 3d scenes are darkened and lit by lights (headlights, fires)
+// brightness 1 = normal; lights are BR_GL_SCENE_LIGHT_FLOATS floats each, see glrend's scene_lighting callback
+void Harness_Hook_SceneLighting(float brightness, const float* lights, int count);
+// A car's texture: tail lights glow brighter while braking
+void Harness_Hook_CarLightGlow(const char* identifier, int braking);
 // Creates a directory (if it does not exist)
 void Harness_Hook_MakeDirectory(const char* path);
 
@@ -155,7 +157,8 @@ int Harness_Hook_Night(int pDarkness);
 
 // glrend callbacks
 int Harness_GL_SceneLighting(float* brightness, const float** lights);
-float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indices, const short** rects, int* rect_count);
+float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indices, const short** rects, int* rect_count, int* id);
+float Harness_GL_GlowScale(int id);
 float Harness_GL_DistanceFade(void);
 int Harness_GL_OverlayRegions(const float** regions);
 void Harness_GL_SwapBuffers(br_pixelmap* pm);

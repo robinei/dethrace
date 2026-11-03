@@ -1910,14 +1910,64 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 }
 
 #ifdef DETHRACE_3DFX_PATCH
-// Added by dethrace: the cars' headlights for the night mode, as spot lights in the space of `pCamera`
+#define SCENE_LIGHT_FLOATS 12
+#define MAX_SCENE_LIGHTS 32
+
+static int AddSceneLight(float* pLights, int pCount, br_vector3* pPos, br_scalar pRange, br_vector3* pDir, br_scalar pStrength,
+    float pR, float pG, float pB, float pHaze) {
+    float* l;
+
+    if (pCount >= MAX_SCENE_LIGHTS) {
+        return pCount;
+    }
+    l = &pLights[SCENE_LIGHT_FLOATS * pCount];
+    l[0] = pPos->v[0];
+    l[1] = pPos->v[1];
+    l[2] = pPos->v[2];
+    l[3] = pRange;
+    l[4] = pDir != NULL ? pDir->v[0] : 0.f;
+    l[5] = pDir != NULL ? pDir->v[1] : 0.f;
+    l[6] = pDir != NULL ? pDir->v[2] : 0.f;
+    l[7] = pStrength;
+    l[8] = pR;
+    l[9] = pG;
+    l[10] = pB;
+    l[11] = pHaze;
+    return pCount + 1;
+}
+
+// Added by dethrace: tail lights glow brighter while the car brakes
+static void UpdateBrakeLights(tCar_spec* pCar, br_actor* pActor) {
+    br_model* model;
+    br_pixelmap* last;
+    int braking;
+    int f;
+
+    model = pActor->model;
+    braking = pCar->brake_force > 0.f;
+    last = NULL;
+    if (pActor->material != NULL && pActor->material->colour_map != NULL) {
+        Harness_Hook_CarLightGlow(pActor->material->colour_map->identifier, braking);
+    }
+    for (f = 0; f < model->nfaces; f++) {
+        if (model->faces[f].material != NULL && model->faces[f].material->colour_map != NULL
+            && model->faces[f].material->colour_map != last) {
+            last = model->faces[f].material->colour_map;
+            Harness_Hook_CarLightGlow(last->identifier, braking);
+        }
+    }
+}
+
+// Added by dethrace: lights for the 3d view from `pCamera` at night: the cars' headlights (showing as beams in
+// the air, more so in fog) and fires on burning cars. Also brake lights, day and night.
 static void SetNightLighting(br_actor* pCamera) {
-    float lights[8 * 32];
+    float lights[SCENE_LIGHT_FLOATS * MAX_SCENE_LIGHTS];
     int count;
     int cat;
     int car_count;
     int i;
     int side;
+    int fog;
     tCar_spec* car;
     br_actor* actor;
     br_bounds* b;
@@ -1926,26 +1976,31 @@ static void SetNightLighting(br_actor* pCamera) {
     br_vector3 d;
     br_vector3 pv;
     br_vector3 dv;
+    float haze;
+    float flicker;
+    float t;
 
     count = 0;
-    if (!gNight) {
-        Harness_Hook_SceneLighting(0, NULL, 0);
-        return;
-    }
+    fog = gProgram_state.current_depth_effect.type == eDepth_effect_fog;
+    // headlight beams show in the night air, more in fog
+    haze = harness_game_config.gl_headlight_haze * (fog ? 0.012f : 0.005f);
     for (cat = eVehicle_self; cat <= eVehicle_rozzer; cat++) {
         car_count = cat == eVehicle_self ? 1 : GetCarCount(cat);
-        for (i = 0; i < car_count && count + 2 <= COUNT_OF(lights) / 8; i++) {
+        for (i = 0; i < car_count; i++) {
             car = cat == eVehicle_self ? &gProgram_state.current_car : GetCarSpec(cat, i);
-            if (car == NULL || car->knackered || car->current_car_actor < 0
-                || car->car_master_actor->render_style == BR_RSTYLE_NONE) {
+            if (car == NULL || car->current_car_actor < 0 || car->car_master_actor->render_style == BR_RSTYLE_NONE) {
                 continue;
             }
             actor = car->car_model_actors[car->current_car_actor].actor;
             if (actor == NULL || actor->model == NULL) {
                 continue;
             }
+            UpdateBrakeLights(car, actor);
+            if (!gNight || car->knackered) {
+                continue;
+            }
             BrActorToActorMatrix34(&to_camera, actor, pCamera);
-            // too far away to light anything that can be seen (camera space z is negative ahead)
+            // too far away to light anything that can be seen
             if (BrVector3LengthSquared((br_vector3*)to_camera.m[3]) > 70.f * 70.f) {
                 continue;
             }
@@ -1960,19 +2015,37 @@ static void SetNightLighting(br_actor* pCamera) {
                 BrMatrix34ApplyP(&pv, &p, &to_camera);
                 BrMatrix34ApplyV(&dv, &d, &to_camera);
                 BrVector3Normalise(&dv, &dv);
-                lights[8 * count + 0] = pv.v[0];
-                lights[8 * count + 1] = pv.v[1];
-                lights[8 * count + 2] = pv.v[2];
-                lights[8 * count + 3] = 9.f; // range, about 60m
-                lights[8 * count + 4] = dv.v[0];
-                lights[8 * count + 5] = dv.v[1];
-                lights[8 * count + 6] = dv.v[2];
-                lights[8 * count + 7] = harness_game_config.gl_headlight_strength;
-                count++;
+                // range about 60m, warm white
+                count = AddSceneLight(lights, count, &pv, 9.f, &dv, harness_game_config.gl_headlight_strength,
+                    1.f, 0.95f, 0.82f, haze);
             }
         }
     }
-    Harness_Hook_SceneLighting(1, lights, count);
+    if (gNight) {
+        // fires on burning cars: flickering orange point lights
+        BrActorToActorMatrix34(&to_camera, gUniverse_actor, pCamera);
+        t = GetTotalTime() / 1000.f;
+        for (i = 0; i < COUNT_OF(gSmoke_column); i++) {
+            if (!((gColumn_flags >> i) & 1) || gSmoke_column[i].colour != 0) {
+                continue;
+            }
+            BrMatrix34ApplyP(&pv, &gSmoke_column[i].pos, &to_camera);
+            if (BrVector3LengthSquared(&pv) > 70.f * 70.f) {
+                continue;
+            }
+            pv.v[1] += 0.1f;
+            flicker = 0.8f + 0.12f * sinf(t * 23.f + i * 1.7f) + 0.08f * sinf(t * 37.f + i * 3.1f);
+            if (gSmoke_column[i].lifetime < 4000) {
+                flicker *= gSmoke_column[i].lifetime / 4000.f;
+            }
+            count = AddSceneLight(lights, count, &pv, 7.f, NULL, 2.4f * flicker, 1.f, 0.55f, 0.2f, 0.f);
+        }
+    }
+    if (gNight) {
+        Harness_Hook_SceneLighting(harness_game_config.gl_night_brightness, lights, count);
+    } else {
+        Harness_Hook_SceneLighting(1.f, lights, count);
+    }
 }
 #endif
 
@@ -2226,7 +2299,7 @@ void RenderAFrame(int pDepth_mask_on) {
 #endif
     }
 #ifdef DETHRACE_3DFX_PATCH
-    Harness_Hook_SceneLighting(0, NULL, 0);
+    Harness_Hook_SceneLighting(1.f, NULL, 0);
     if (post_processing) {
         Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, ((br_camera*)gCamera->type_data)->yon_z);
     }
@@ -2309,7 +2382,7 @@ void RenderAFrame(int pDepth_mask_on) {
 #endif
         BrZbSceneRenderEnd();
 #ifdef DETHRACE_3DFX_PATCH
-        Harness_Hook_SceneLighting(0, NULL, 0);
+        Harness_Hook_SceneLighting(1.f, NULL, 0);
         PDLockRealBackScreen(1);
 #endif
         gRearview_camera->t.t.mat = old_mirror_cam_matrix;

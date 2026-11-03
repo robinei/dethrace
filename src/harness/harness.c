@@ -313,6 +313,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_night = 2;
     harness_game_config.gl_night_brightness = 0.3f;
     harness_game_config.gl_headlight_strength = 2.0f;
+    harness_game_config.gl_headlight_haze = 1.0f;
     harness_game_config.draw_distance = 1.0f;
     harness_game_config.max_detail = 0;
     harness_game_config.msaa_samples = 4;
@@ -597,6 +598,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_night = strcmp(value, "auto") == 0 ? 2 : (value[0] == '1');
     } else if (MATCH("General", "NightBrightness")) {
         harness_game_config.gl_night_brightness = ClampConfigFloat(atof(value), 0.0f, 1.0f);
+    } else if (MATCH("General", "HeadlightHaze")) {
+        harness_game_config.gl_headlight_haze = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "HeadlightStrength")) {
         harness_game_config.gl_headlight_strength = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "Glow")) {
@@ -861,8 +864,37 @@ static int glow_compare(const void* key, const void* entry) {
     return toupper((unsigned char)*a) - *b;
 }
 
-float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indices, const short** rects, int* rect_count) {
+// glow scale of each glow table entry (eg. brake lights), see Harness_Hook_CarLightGlow
+static float glow_scales[1024];
+
+float Harness_GL_GlowScale(int id) {
+    return id >= 0 && id < (int)(sizeof(glow_scales) / sizeof(glow_scales[0])) ? glow_scales[id] : 1.0f;
+}
+
+void Harness_Hook_CarLightGlow(const char* identifier, int braking) {
     const tGlow_entry* entry;
+
+    if (identifier == NULL) {
+        return;
+    }
+    entry = bsearch(identifier, gGlow_table, gGlow_table_count, sizeof(tGlow_entry), glow_compare);
+    if (entry != NULL && entry->light_type == eGlow_light_tail && entry - gGlow_table < (int)(sizeof(glow_scales) / sizeof(glow_scales[0]))) {
+        // tail lights: dim while driving, bright brake lights
+        glow_scales[entry - gGlow_table] = braking ? 1.6f : 0.45f;
+    }
+}
+
+float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indices, const short** rects, int* rect_count, int* id) {
+    const tGlow_entry* entry;
+    static int scales_set;
+
+    if (!scales_set) {
+        int i;
+        for (i = 0; i < (int)(sizeof(glow_scales) / sizeof(glow_scales[0])); i++) {
+            glow_scales[i] = 1.0f;
+        }
+        scales_set = 1;
+    }
 
     if (!harness_game_config.gl_glow || identifier == NULL) {
         return 0.0f;
@@ -874,6 +906,7 @@ float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indic
     *indices = entry->indices;
     *rects = entry->rects;
     *rect_count = entry->rect_count;
+    *id = (int)(entry - gGlow_table);
     return entry->intensity;
 }
 
@@ -893,26 +926,22 @@ int Harness_Hook_Night(int pDarkness) {
     return night_now;
 }
 
-static int scene_lighting_on;
-static float scene_lights[8 * BR_GL_MAX_SCENE_LIGHTS];
+static float scene_brightness = 1.0f;
+static float scene_lights[BR_GL_SCENE_LIGHT_FLOATS * BR_GL_MAX_SCENE_LIGHTS];
 static int scene_light_count;
 
-void Harness_Hook_SceneLighting(int on, const float* lights, int count) {
-    scene_lighting_on = on;
+void Harness_Hook_SceneLighting(float brightness, const float* lights, int count) {
+    scene_brightness = brightness;
     scene_light_count = 0;
-    if (on && lights != NULL && count > 0) {
+    if (lights != NULL && count > 0) {
         scene_light_count = count < BR_GL_MAX_SCENE_LIGHTS ? count : BR_GL_MAX_SCENE_LIGHTS;
-        memcpy(scene_lights, lights, sizeof(float) * 8 * scene_light_count);
+        memcpy(scene_lights, lights, sizeof(float) * BR_GL_SCENE_LIGHT_FLOATS * scene_light_count);
     }
 }
 
 int Harness_GL_SceneLighting(float* brightness, const float** lights) {
-    *brightness = 1.0f;
+    *brightness = scene_brightness;
     *lights = scene_lights;
-    if (!scene_lighting_on || !night_now) {
-        return 0;
-    }
-    *brightness = harness_game_config.gl_night_brightness;
     return scene_light_count;
 }
 

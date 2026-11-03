@@ -75,6 +75,7 @@ typedef struct tHarness_game_config {
     int gl_night;
     float gl_night_brightness;
     float gl_headlight_strength;
+    float gl_headlight_haze;
 
     // Multiplier for the draw distance chosen in the game's options
     float draw_distance;
