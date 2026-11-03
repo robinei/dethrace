@@ -15,8 +15,12 @@ for n, (name, e) in enumerate(entries):
     for i in e['indices']:
         mask[i >> 3] |= 1 << (i & 7)
     rects = e.get('rects') or []
-    lines.append('    { "%s", %.2ff, { %s }, %d, %s }, // %s: %s' % (
-        name.upper(), e['intensity'], ', '.join('0x%02x' % b for b in mask), len(rects),
+    note = e.get('note', '').lower()
+    light_type = 'eGlow_light_other'
+    if e['kind'] == 'car_light':
+        light_type = 'eGlow_light_tail' if ('tail' in note or 'brake' in note) else 'eGlow_light_head' if 'head' in note else 'eGlow_light_other'
+    lines.append('    { "%s", %.2ff, { %s }, %s, %d, %s }, // %s: %s' % (
+        name.upper(), e['intensity'], ', '.join('0x%02x' % b for b in mask), light_type, len(rects),
         ('rects_%d' % n) if rects else 'NULL', e['kind'], e.get('note', '').replace('*/', '')))
 lines.append('};')
 lines.append('const int gGlow_table_count = %d;' % len(entries))
