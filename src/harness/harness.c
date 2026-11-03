@@ -14,6 +14,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <direct.h>
+#endif
 
 extern br_uint_32 gI_am_cheating;
 extern int gSound_override;
@@ -872,6 +875,14 @@ float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indic
     *rects = entry->rects;
     *rect_count = entry->rect_count;
     return entry->intensity;
+}
+
+void Harness_Hook_MakeDirectory(const char* path) {
+#ifdef _WIN32
+    _mkdir(path);
+#else
+    mkdir(path, 0755);
+#endif
 }
 
 static int night_now;

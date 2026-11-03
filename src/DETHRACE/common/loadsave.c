@@ -9,6 +9,7 @@
 #include "grafdata.h"
 #include "graphics.h"
 #include "harness/config.h"
+#include "harness/hooks.h"
 #include "harness/trace.h"
 #include "init.h"
 #include "input.h"
@@ -606,6 +607,19 @@ void SaveTheGame(int pSlot_number) {
     the_path[strlen(the_path) - 1] = '0' + pSlot_number;
     PDFileUnlock(the_path);
     f = DRfopen(the_path, "wb");
+#ifdef DETHRACE_FIX_BUGS
+    if (f == NULL) {
+        // Added by dethrace: the SAVEGAME directory can be missing (eg. GOG installs keep the DOS version's
+        // saves elsewhere), and the game was not saved without a word
+        tPath_name dir;
+        PathCat(dir, gApplication_path, "SAVEGAME");
+        Harness_Hook_MakeDirectory(dir);
+        f = DRfopen(the_path, "wb");
+        if (f == NULL) {
+            LOG_WARN2("Could not write the saved game %s", the_path);
+        }
+    }
+#endif
     if (f != NULL) {
         CorrectSaveByteOrdering(pSlot_number);
         fwrite(gSaved_games[pSlot_number], 1, sizeof(tSave_game), f);
