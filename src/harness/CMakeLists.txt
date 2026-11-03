@@ -50,6 +50,8 @@ target_sources(harness PRIVATE
     harness_trace.c
     harness.c
     harness.h
+    glow_table.c
+    glow_table.h
 
     "${CMAKE_CURRENT_BINARY_DIR}/version.h"
 )

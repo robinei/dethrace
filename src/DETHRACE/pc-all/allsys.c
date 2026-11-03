@@ -622,6 +622,7 @@ void PDAllocateScreenAndBack(void) {
             gl_callbacks.swap_buffers = Harness_GL_SwapBuffers;
             gl_callbacks.overlay_regions = Harness_GL_OverlayRegions;
             gl_callbacks.distance_fade = Harness_GL_DistanceFade;
+            gl_callbacks.texture_glow = Harness_GL_TextureGlow;
             gl_callbacks.fog_distance = harness_game_config.gl_distance_fog;
             gl_callbacks.get_viewport = gHarness_platform.GetViewport;
             gl_callbacks.adjust_render_viewport = Harness_GL_AdjustRenderViewport;

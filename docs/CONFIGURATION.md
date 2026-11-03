@@ -55,6 +55,11 @@ DepthOfFieldStart = 0.4
 DepthOfFieldEnd = 1
 DepthOfFieldStrength = 3
 
+; Only used in 3dfx mode. Glow around light sources: lit windows, neon, lamps, car lights, fire and sparks
+; (from a table of the textures' light texels, see tools/glow). Lights in the dark stay visible further
+Glow = 0
+GlowStrength = 0.7
+
 ; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1

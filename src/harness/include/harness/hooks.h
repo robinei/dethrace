@@ -145,6 +145,7 @@ int Harness_Hook_PostProcessBegin(br_pixelmap* screen);
 void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon);
 
 // glrend callbacks
+float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indices, const short** rects, int* rect_count);
 float Harness_GL_DistanceFade(void);
 int Harness_GL_OverlayRegions(const float** regions);
 void Harness_GL_SwapBuffers(br_pixelmap* pm);
