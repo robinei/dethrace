@@ -183,7 +183,9 @@ static void map_window_open(void) {
     if (map_window != NULL || map_window_closed) {
         return;
     }
-    map_window = SDL2_CreateWindow("Dethrace map", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 400, SDL_WINDOW_RESIZABLE);
+    // (kept above the game where the windowing system lets programs ask for it: not on Wayland, where it is the
+    // compositor's rule to make)
+    map_window = SDL2_CreateWindow("Dethrace map", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 400, SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALWAYS_ON_TOP);
     if (map_window == NULL) {
         LOG_WARN2("Failed to create the map's window: %s", SDL2_GetError());
         map_window_closed = 1;
