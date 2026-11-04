@@ -342,6 +342,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_flashes = 0.f;
     harness_game_config.gl_wet_roads = 0.f;
     harness_game_config.gl_ice_reflections = 0.f;
+    harness_game_config.gl_water_reflections = 0.f;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -598,6 +599,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_flashes = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "IceReflections")) {
         harness_game_config.gl_ice_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
+    } else if (MATCH("General", "WaterReflections")) {
+        harness_game_config.gl_water_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "WetRoads")) {
         harness_game_config.gl_wet_roads = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "SunShading")) {
@@ -892,6 +895,8 @@ typedef struct br_gl_post_params {
     float wet;
     float up[3];
     float ice;
+    float water;
+    float to_world[12];
     int shimmer_count;
     float shimmers[4 * 8];
 } br_gl_post_params;
@@ -904,7 +909,7 @@ int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
     if (!harness_game_config.opengl_3dfx_mode || screen == NULL
         || !(harness_game_config.gl_depth_of_field || harness_game_config.gl_glow || harness_game_config.gl_ssao
             || harness_game_config.gl_speed_blur || harness_game_config.gl_heat_shimmer || harness_game_config.gl_colour_grading
-            || ((harness_game_config.gl_wet_roads > 0.f || harness_game_config.gl_ice_reflections > 0.f) && harness_game_config.gl_glow))) {
+            || ((harness_game_config.gl_wet_roads > 0.f || harness_game_config.gl_ice_reflections > 0.f || harness_game_config.gl_water_reflections > 0.f) && harness_game_config.gl_glow))) {
         return 0;
     }
     if (BrGLPostProcessBegin(screen, harness_game_config.gl_glow) != BRE_OK) {
@@ -920,7 +925,7 @@ void Harness_Hook_PostProcessDepthSnapshot(void) {
     }
 }
 
-void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* up, const float* fires, int fire_count) {
+void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* up, const float* to_world, const float* fires, int fire_count) {
     br_gl_post_params params;
     int vx, vy;
     float sx, sy;
@@ -948,7 +953,11 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
     if (up != NULL) {
         memcpy(params.up, up, sizeof(params.up));
     }
+    if (to_world != NULL) {
+        memcpy(params.to_world, to_world, sizeof(params.to_world));
+    }
     params.ice = harness_game_config.gl_glow ? harness_game_config.gl_ice_reflections : 0.0f;
+    params.water = harness_game_config.gl_glow ? harness_game_config.gl_water_reflections : 0.0f;
     params.time = gHarness_platform.GetTicks != NULL ? (gHarness_platform.GetTicks() % 1000000) / 1000.0f : 0.0f;
     if (harness_game_config.gl_heat_shimmer && fires != NULL) {
         params.shimmer_count = fire_count < 8 ? fire_count : 8;
@@ -1073,9 +1082,18 @@ void Harness_Hook_ReflectiveTexture(const char* identifier) {
     }
 }
 
+// 1 for ice (registered by the track), 0.5 for water (and the other liquids), 0 for the rest
 float Harness_GL_TextureReflect(const char* identifier) {
+    static const char* water[] = { "water2.pix", "water1b.pix", "liquid.pix" };
     int i;
 
+    if (harness_game_config.gl_water_reflections > 0.f) {
+        for (i = 0; i < (int)(sizeof(water) / sizeof(water[0])); i++) {
+            if (strcasecmp(water[i], identifier) == 0) {
+                return 0.5f;
+            }
+        }
+    }
     if (harness_game_config.gl_ice_reflections <= 0.f) {
         return 0.f;
     }

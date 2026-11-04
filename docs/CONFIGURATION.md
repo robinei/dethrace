@@ -110,6 +110,10 @@ WetRoads = 0
 ; around it, softly and more at grazing angles, day and night. The strength, 0 disables
 IceReflections = 0
 
+; Only used in 3dfx mode, needs Glow. Water (and the other liquids) mirrors the scenery, cars and sky with a
+; gentle ripple, more at grazing angles. The strength, 0 disables
+WaterReflections = 0
+
 ; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1

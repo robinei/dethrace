@@ -2212,8 +2212,11 @@ static void PostProcessView(void) {
     br_vector3 pv;
     br_vector3 d;
     float up[3];
+    br_matrix34 to_world;
 
     fire_count = 0;
+    // view to world, for what the post-processing anchors in the world (the ripples on water)
+    BrActorToActorMatrix34(&to_world, gCamera, gUniverse_actor);
     BrActorToActorMatrix34(&to_camera, gUniverse_actor, gCamera);
     // the world's up in view space, for the reflections on the ground
     BrVector3Set(&d, 0.f, 1.f, 0.f);
@@ -2240,7 +2243,7 @@ static void PostProcessView(void) {
     mph = fabsf(gCar_to_view->speedo_speed) * WORLD_SCALE / 1600.f * 3600000.f;
     // (the draw distance, which the depth of field goes by, not the far plane, which DrawEverything moves out)
     Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, MIN(((br_camera*)gCamera->type_data)->yon_z, gYon_multiplier * gCamera_yon),
-        gAction_replay_mode ? 0.f : MAX(0.f, MIN(1.f, (mph - 70.f) / 80.f)), gNight, up, fires, fire_count);
+        gAction_replay_mode ? 0.f : MAX(0.f, MIN(1.f, (mph - 70.f) / 80.f)), gNight, up, &to_world.m[0][0], fires, fire_count);
 }
 #endif
 
