@@ -24,6 +24,7 @@
 #include "netgame.h"
 #include "network.h"
 #include "oil.h"
+#include "skidmark.h"
 #include "opponent.h"
 #include "pd/sys.h"
 #include "pedestrn.h"
@@ -2370,6 +2371,7 @@ static int DrawSunShadowMap(void) {
     br_vector3 x, y, z, centre, ahead, tv, sun_flat;
     float texel, cx, cy, cz;
     int i, level, cx_i, cz_i, drawn;
+    br_uint_8 decal_style[SKID_COUNT + COUNT_OF(gOily_spills)];
 
     // (at night too: the moon's, from the same direction, fainter; see Harness_Hook_PostProcessEnd)
     if (gMap_mode || gUniverse_actor == NULL || gCamera == NULL || harness_game_config.gl_sun_shadows <= 0.f) {
@@ -2418,6 +2420,20 @@ static int DrawSunShadowMap(void) {
     // outside RenderShadows, but only once that has run)
     if (gShadow_actor != NULL) {
         gShadow_actor->render_style = BR_RSTYLE_NONE;
+    }
+    // the marks on the ground (skid marks, blood tracks, oil) are hidden: they lie a little above it and would
+    // shadow it
+    for (i = 0; i < SKID_COUNT; i++) {
+        decal_style[i] = gSkids[i].actor != NULL ? gSkids[i].actor->render_style : 0;
+        if (gSkids[i].actor != NULL) {
+            gSkids[i].actor->render_style = BR_RSTYLE_NONE;
+        }
+    }
+    for (i = 0; i < COUNT_OF(gOily_spills); i++) {
+        decal_style[SKID_COUNT + i] = gOily_spills[i].actor != NULL ? gOily_spills[i].actor->render_style : 0;
+        if (gOily_spills[i].actor != NULL) {
+            gOily_spills[i].actor->render_style = BR_RSTYLE_NONE;
+        }
     }
     drawn = 0;
     BrActorAdd(gUniverse_actor, sun_camera);
@@ -2483,6 +2499,16 @@ static int DrawSunShadowMap(void) {
         drawn = 1;
     }
     BrActorRemove(sun_camera);
+    for (i = 0; i < SKID_COUNT; i++) {
+        if (gSkids[i].actor != NULL) {
+            gSkids[i].actor->render_style = decal_style[i];
+        }
+    }
+    for (i = 0; i < COUNT_OF(gOily_spills); i++) {
+        if (gOily_spills[i].actor != NULL) {
+            gOily_spills[i].actor->render_style = decal_style[SKID_COUNT + i];
+        }
+    }
     return drawn;
 }
 #endif
