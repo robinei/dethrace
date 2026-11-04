@@ -17,6 +17,7 @@ typedef struct tGlow_entry {
     int light_type;              // eGlow_light_*
     int rect_count;              // if non-zero, the glow is limited to these rectangles
     const short* rects;          // x, y, width, height for each
+    int lamp;                    // a lamp, neon or a sign: a light out in the world (see Harness_GlowLamp)
 } tGlow_entry;
 
 extern const tGlow_entry gGlow_table[];

@@ -9,6 +9,7 @@
 #include "errors.h"
 #include "finteray.h"
 #include "flicplay.h"
+#include "formats.h"
 #include "globvars.h"
 #include "globvrbm.h"
 #include "globvrkm.h"
@@ -1943,6 +1944,164 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 #define SCENE_LIGHT_FLOATS 12
 #define MAX_SCENE_LIGHTS 32
 
+// Added by dethrace: the lamps out in the track (street lamps, neon, signs: the glow table's, see
+// Harness_GlowLamp), found in its faces when it changes, for the air glowing around them at night
+typedef struct tLamp {
+    br_vector3 pos;
+    br_scalar area;
+    float rgb[3];
+} tLamp;
+static tLamp gLamps[2048];
+static int gLamp_count;
+
+// The colour of a lamp texture's light texels (its palette indices in the mask), brightest component 1
+static void LampColour(br_pixelmap* pMap, const unsigned char* pIndices, float pIntensity, float* pRGB) {
+    br_colour* palette;
+    br_colour c;
+    float sum[3];
+    float most;
+    int x;
+    int y;
+    int i;
+    int n;
+
+    sum[0] = sum[1] = sum[2] = 0.f;
+    n = 0;
+    if (pMap->pixels != NULL && pMap->type == BR_PMT_INDEX_8 && gRender_palette != NULL && gRender_palette->pixels != NULL) {
+        palette = (br_colour*)gRender_palette->pixels;
+        for (y = 0; y < pMap->height; y++) {
+            for (x = 0; x < pMap->width; x++) {
+                i = ((tU8*)pMap->pixels)[y * pMap->row_bytes + x];
+                if (pIndices[i >> 3] & (1 << (i & 7))) {
+                    c = palette[i];
+                    sum[0] += BR_RED(c);
+                    sum[1] += BR_GRN(c);
+                    sum[2] += BR_BLU(c);
+                    n++;
+                }
+            }
+        }
+    }
+    if (n == 0) {
+        sum[0] = sum[1] = sum[2] = 1.f;
+    }
+    most = MAX(sum[0], MAX(sum[1], sum[2]));
+    for (i = 0; i < 3; i++) {
+        pRGB[i] = most > 0.f ? sum[i] / most * pIntensity : pIntensity;
+    }
+}
+
+static br_uintptr_t FindLampsCB(br_actor* pActor, void* pArg) {
+    br_matrix34 to_world;
+    br_material* material;
+    const unsigned char* indices;
+    float intensity;
+    float rgb[3];
+    br_vector3 v[3];
+    br_vector3 centre;
+    br_vector3 e1;
+    br_vector3 e2;
+    br_vector3 n;
+    br_scalar area;
+    struct v11group* group;
+    int g;
+    int f;
+    int k;
+    int l;
+
+    if (pActor->type != BR_ACTOR_MODEL || pActor->model == NULL || pActor->model->prepared == NULL) {
+        return 0;
+    }
+    BrActorToActorMatrix34(&to_world, pActor, gUniverse_actor);
+    for (g = 0; g < V11MODEL(pActor->model)->ngroups; g++) {
+        group = &V11MODEL(pActor->model)->groups[g];
+        material = group->user;
+        if (material == NULL || material->colour_map == NULL || material->colour_map->identifier == NULL
+            || !Harness_GlowLamp(material->colour_map->identifier, &indices, &intensity)) {
+            continue;
+        }
+        LampColour(material->colour_map, indices, intensity, rgb);
+        for (f = 0; f < group->nfaces; f++) {
+            for (k = 0; k < 3; k++) {
+                BrMatrix34ApplyP(&v[k], &group->position[group->vertex_numbers[f].v[k]], &to_world);
+            }
+            BrVector3Add(&centre, &v[0], &v[1]);
+            BrVector3Accumulate(&centre, &v[2]);
+            BrVector3InvScale(&centre, &centre, 3.f);
+            BrVector3Sub(&e1, &v[1], &v[0]);
+            BrVector3Sub(&e2, &v[2], &v[0]);
+            BrVector3Cross(&n, &e1, &e2);
+            area = BrVector3Length(&n) * 0.5f + 1e-6f;
+            // (the faces of one lamp together: within a couple of metres)
+            for (l = 0; l < gLamp_count; l++) {
+                if (Vector3DistanceSquared(&gLamps[l].pos, &centre) < 0.25f * 0.25f) {
+                    break;
+                }
+            }
+            if (l < gLamp_count) {
+                br_scalar total = gLamps[l].area + area;
+                BrVector3Scale(&gLamps[l].pos, &gLamps[l].pos, gLamps[l].area / total);
+                BrVector3Scale(&centre, &centre, area / total);
+                BrVector3Accumulate(&gLamps[l].pos, &centre);
+                for (k = 0; k < 3; k++) {
+                    gLamps[l].rgb[k] = (gLamps[l].rgb[k] * gLamps[l].area + rgb[k] * area) / total;
+                }
+                gLamps[l].area = total;
+            } else if (gLamp_count < COUNT_OF(gLamps)) {
+                gLamps[gLamp_count].pos = centre;
+                gLamps[gLamp_count].area = area;
+                memcpy(gLamps[gLamp_count].rgb, rgb, sizeof(rgb));
+                gLamp_count++;
+            }
+        }
+    }
+    return 0;
+}
+
+// Finds the lamps when the track has changed
+static void EnsureLamps(void) {
+    static br_actor* found_for;
+    static char found_track[sizeof(gProgram_state.track_file_name)];
+
+    if (gTrack_actor != NULL && (found_for != gTrack_actor || strcmp(found_track, gProgram_state.track_file_name) != 0)) {
+        found_for = gTrack_actor;
+        strcpy(found_track, gProgram_state.track_file_name);
+        gLamp_count = 0;
+        DRActorEnumRecurse(gTrack_actor, FindLampsCB, NULL);
+        if (gNon_track_actor != NULL) {
+            DRActorEnumRecurse(gNon_track_actor, FindLampsCB, NULL);
+        }
+    }
+}
+
+// The nearest lamps to pPos, up to pMost of them within pFar (in pOrder, with their distances in pDist): returns
+// how many
+static int NearestLamps(br_vector3* pPos, float pFar, int pMost, int* pOrder, float* pDist) {
+    int count;
+    int i;
+    int j;
+    int t;
+
+    count = 0;
+    for (i = 0; i < gLamp_count; i++) {
+        pDist[i] = Vector3Distance(&gLamps[i].pos, pPos);
+        if (pDist[i] < pFar) {
+            pOrder[count++] = i;
+        }
+    }
+    // (a partial selection sort: one more than asked for, whose distance is where the rest fade out)
+    for (i = 0; i < count && i <= pMost; i++) {
+        for (j = i + 1; j < count; j++) {
+            if (pDist[pOrder[j]] < pDist[pOrder[i]]) {
+                t = pOrder[i];
+                pOrder[i] = pOrder[j];
+                pOrder[j] = t;
+            }
+        }
+    }
+    return count;
+}
+
 static int AddSceneLight(float* pLights, int pCount, br_vector3* pPos, br_scalar pRange, br_vector3* pDir, br_scalar pStrength,
     float pR, float pG, float pB, float pHaze) {
     float* l;
@@ -2167,6 +2326,37 @@ static void SetNightLighting(br_actor* pCamera) {
             }
             count = AddSceneLight(lights, count, &pv, 7.f, NULL, 2.4f * flicker, 1.f, 0.55f, 0.2f, 0.f);
         }
+        // the street lamps light the street, about 25m around (and neon and signs what is around them): wide cones down from the
+        // nearest 8, fading out towards where the next nearest is, so they don't pop in
+        if (harness_game_config.gl_glow && harness_game_config.gl_lamp_haze > 0.f && gTrack_actor != NULL) {
+            static int order[COUNT_OF(gLamps)];
+            static float dist[COUNT_OF(gLamps)];
+            br_matrix34 to_world;
+            br_vector3 cam;
+            int lamps;
+            float edge;
+            float fade;
+
+            EnsureLamps();
+            BrActorToActorMatrix34(&to_world, pCamera, gUniverse_actor);
+            BrVector3Set(&cam, to_world.m[3][0], to_world.m[3][1], to_world.m[3][2]);
+            lamps = NearestLamps(&cam, 12.f, 8, order, dist);
+            edge = lamps > 8 ? dist[order[8]] : 12.f;
+            BrVector3Set(&d, 0.f, -1.f, 0.f);
+            BrMatrix34ApplyV(&dv, &d, &to_camera);
+            // (a direction twice as long: a wide cone, see spotCone)
+            BrVector3Normalise(&dv, &dv);
+            BrVector3Scale(&dv, &dv, 2.f);
+            for (i = 0; i < MIN(lamps, 8) && count < MAX_SCENE_LIGHTS - 4; i++) {
+                tLamp* lamp = &gLamps[order[i]];
+                fade = MIN(1.f, (edge - dist[order[i]]) / (0.3f * edge));
+                if (fade <= 0.f) {
+                    continue;
+                }
+                BrMatrix34ApplyP(&pv, &lamp->pos, &to_camera);
+                count = AddSceneLight(lights, count, &pv, 4.f, &dv, 2.f * fade, lamp->rgb[0], lamp->rgb[1], lamp->rgb[2], 0.f);
+            }
+        }
     }
     count = AddFlashes(lights, count, pCamera);
     if (harness_game_config.gl_pedestrian_shadows) {
@@ -2229,6 +2419,43 @@ static void SetNightLighting(br_actor* pCamera) {
 #endif
 
 #ifdef DETHRACE_3DFX_PATCH
+// The lamps nearest the camera (and fading out further off), in view space, to the post-processing
+static void PassLamps(br_matrix34* pTo_camera, br_matrix34* pTo_world) {
+    static int order[COUNT_OF(gLamps)];
+    static float dist[COUNT_OF(gLamps)];
+    float out[8 * 24];
+    br_vector3 cam;
+    br_vector3 v;
+    int count;
+    int i;
+    float reach;
+    float far;
+
+    if (gTrack_actor == NULL) {
+        Harness_Hook_Lamps(NULL, 0);
+        return;
+    }
+    EnsureLamps();
+    BrVector3Set(&cam, pTo_world->m[3][0], pTo_world->m[3][1], pTo_world->m[3][2]);
+    far = 15.f; // about 100m
+    count = MIN(NearestLamps(&cam, far, 24, order, dist), 24);
+    for (i = 0; i < count; i++) {
+        tLamp* lamp = &gLamps[order[i]];
+        BrMatrix34ApplyP(&v, &lamp->pos, pTo_camera);
+        // (bigger lamps, a wider glow: 4 to 8 metres)
+        reach = MAX(0.6f, MIN(1.2f, 0.6f + sqrtf(lamp->area) * 2.f));
+        out[8 * i + 0] = v.v[0];
+        out[8 * i + 1] = v.v[1];
+        out[8 * i + 2] = v.v[2];
+        out[8 * i + 3] = reach;
+        out[8 * i + 4] = lamp->rgb[0];
+        out[8 * i + 5] = lamp->rgb[1];
+        out[8 * i + 6] = lamp->rgb[2];
+        out[8 * i + 7] = 1.f - (dist[order[i]] > 0.7f * far ? (dist[order[i]] - 0.7f * far) / (0.3f * far) : 0.f);
+    }
+    Harness_Hook_Lamps(out, count);
+}
+
 // Added by dethrace: how much of the weather falls, by whether there is a roof over the car (a ray straight up
 // into the track): once that has stayed the same for 2 seconds, the weather fades out (or back in) over one
 static float WeatherOpen(void) {
@@ -2312,6 +2539,7 @@ static void PostProcessView(void) {
     // the speed blur fades in from 70 to 150 mph
     mph = fabsf(gCar_to_view->speedo_speed) * WORLD_SCALE / 1600.f * 3600000.f;
     Harness_Hook_WeatherOpen(WeatherOpen());
+    PassLamps(&to_camera, &to_world);
     // (the draw distance, which the depth of field goes by, not the far plane, which DrawEverything moves out)
     Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, MIN(((br_camera*)gCamera->type_data)->yon_z, gYon_multiplier * gCamera_yon),
         gAction_replay_mode ? 0.f : MAX(0.f, MIN(1.f, (mph - 70.f) / 80.f)), gNight, up, &to_world.m[0][0], fires, fire_count);

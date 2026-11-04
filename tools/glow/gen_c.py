@@ -19,9 +19,10 @@ for n, (name, e) in enumerate(entries):
     light_type = 'eGlow_light_other'
     if e['kind'] == 'car_light':
         light_type = 'eGlow_light_tail' if ('tail' in note or 'brake' in note) else 'eGlow_light_head' if 'head' in note else 'eGlow_light_other'
-    lines.append('    { "%s", %.2ff, { %s }, %s, %d, %s }, // %s: %s' % (
+    lamp = 1 if e['kind'] in ('lamp', 'neon', 'sign') else 0
+    lines.append('    { "%s", %.2ff, { %s }, %s, %d, %s, %d }, // %s: %s' % (
         name.upper(), e['intensity'], ', '.join('0x%02x' % b for b in mask), light_type, len(rects),
-        ('rects_%d' % n) if rects else 'NULL', e['kind'], e.get('note', '').replace('*/', '')))
+        ('rects_%d' % n) if rects else 'NULL', lamp, e['kind'], e.get('note', '').replace('*/', '')))
 lines.append('};')
 lines.append('const int gGlow_table_count = %d;' % len(entries))
 open(out, 'w').write('\n'.join(lines) + '\n')

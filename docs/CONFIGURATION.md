@@ -139,6 +139,10 @@ IceReflections = 0
 ; gentle ripple, more at grazing angles. The strength, 0 disables
 WaterReflections = 0
 
+; Only used in 3dfx mode, needs Glow. At night the street lamps (and neon and signs) light the street around
+; them, and the air glows around them, more in the rain. The strength of the glow in the air, 0 disables both
+LampHaze = 1
+
 ; Only used in 3dfx mode, needs a post-processing effect. Snow falls on the tracks with ice, and rain at night on
 ; the others. It stops under a roof (tunnels, the mines) once the car has been under it for 2 seconds, and starts
 ; again the same way. The amount, 0 disables

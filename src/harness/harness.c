@@ -353,6 +353,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_car_wear = 0.f;
     harness_game_config.gl_sun_shadows = 0.f;
     harness_game_config.gl_weather = 0.f;
+    harness_game_config.gl_lamp_haze = 1.f;
     harness_game_config.gl_relief = 0.f;
     harness_game_config.texture_upscaler = 0;
 
@@ -614,6 +615,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_water_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "Relief")) {
         harness_game_config.gl_relief = ClampConfigFloat(atof(value), 0.0f, 4.0f);
+    } else if (MATCH("General", "LampHaze")) {
+        harness_game_config.gl_lamp_haze = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "Weather")) {
         harness_game_config.gl_weather = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "SunShadows")) {
@@ -943,6 +946,8 @@ typedef struct br_gl_post_params {
     float specular;
     int shimmer_count;
     float shimmers[4 * 8];
+    int lamp_count;
+    float lamps[8 * 24];
 } br_gl_post_params;
 br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen, br_boolean glow);
 void BR_PUBLIC_ENTRY BrGLPostProcessDepthSnapshot(br_pixelmap* screen);
@@ -1014,6 +1019,9 @@ void Harness_Hook_SoftParticles(int on) {
     }
 }
 
+static float lamps[8 * 24];
+static int lamp_count;
+
 static float weather_open = 1.f;
 
 void Harness_Hook_WeatherOpen(float pOpen) {
@@ -1068,6 +1076,16 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
         params.weather[1] = harness_game_config.gl_weather * weather_open;
         // (at night the rain catches the city's lights: brighter than the snow)
         params.weather[2] = night ? (reflective_texture_count > 0 ? 0.25f : 0.55f) + 0.5f * harness_game_config.gl_night_brightness : 0.95f;
+    }
+    // the air glowing around the lamps at night: more in the rain (and where it falls)
+    params.lamp_count = 0;
+    if (night && harness_game_config.gl_lamp_haze > 0.f && lamp_count > 0) {
+        float air = harness_game_config.gl_lamp_haze * (1.f + (params.weather[0] > 0.5f ? 1.5f * params.weather[1] : 0.f));
+        params.lamp_count = lamp_count;
+        memcpy(params.lamps, lamps, sizeof(float) * 8 * lamp_count);
+        for (int i = 0; i < lamp_count; i++) {
+            params.lamps[8 * i + 7] *= air;
+        }
     }
     params.time = gHarness_platform.GetTicks != NULL ? (gHarness_platform.GetTicks() % 1000000) / 1000.0f : 0.0f;
     if (harness_game_config.gl_heat_shimmer && fires != NULL) {
@@ -1130,6 +1148,28 @@ float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indic
     *rect_count = entry->rect_count;
     *id = (int)(entry - gGlow_table);
     return entry->intensity;
+}
+
+int Harness_GlowLamp(const char* identifier, const unsigned char** indices, float* intensity) {
+    const tGlow_entry* entry;
+
+    if (!harness_game_config.gl_glow || harness_game_config.gl_lamp_haze <= 0.f || identifier == NULL) {
+        return 0;
+    }
+    entry = bsearch(identifier, gGlow_table, gGlow_table_count, sizeof(tGlow_entry), glow_compare);
+    if (entry == NULL || !entry->lamp) {
+        return 0;
+    }
+    *indices = entry->indices;
+    *intensity = entry->intensity;
+    return 1;
+}
+
+void Harness_Hook_Lamps(const float* pLamps, int pCount) {
+    lamp_count = pCount < 24 ? pCount : 24;
+    if (lamp_count > 0) {
+        memcpy(lamps, pLamps, sizeof(float) * 8 * lamp_count);
+    }
 }
 
 void Harness_Hook_MakeDirectory(const char* path) {
