@@ -78,4 +78,4 @@ for k in ('FLAMES.PIX', 'APTLITE.PIX', 'RO2DED1.PIX', 'RO3DED1.PIX', 'RO4DED1.PI
     D.pop(k, None)
 
 # glowing lamps whose surroundings share their colour (rock, rusty plates, panels): keep the marked core
-NO_GROW = set(n + '.PIX' for n in 'DECK2 LITPLATE MINLIT MNWALITE TUNLWAL2 TUNLROOF SEALIGHT TRILITE'.split())
+NO_GROW = set(n + '.PIX' for n in 'DECK2 LITPLATE MINLIT MNWALITE TUNLWAL2 TUNLROOF SEALIGHT TRILITE METALIT'.split())
