@@ -1158,16 +1158,15 @@ void Harness_Hook_CarTexture(const char* identifier) {
     }
 }
 
-// 1 for ice (registered by the track), 0.5 for water (and the other liquids), 0.25 for car paint, 0 for the rest
+// 1 for ice (registered by the track), 0.5 for water (and the other liquids), 0.25 for car paint (-0.25 for
+// it without CarReflections: still no relief on it), 0 for the rest
 float Harness_GL_TextureReflect(const char* identifier) {
     static const char* water[] = { "water2.pix", "water1b.pix", "liquid.pix" };
     int i;
 
-    if (harness_game_config.gl_car_reflections > 0.f) {
-        for (i = 0; i < car_texture_count; i++) {
-            if (strcasecmp(car_textures[i], identifier) == 0) {
-                return 0.25f;
-            }
+    for (i = 0; i < car_texture_count; i++) {
+        if (strcasecmp(car_textures[i], identifier) == 0) {
+            return harness_game_config.gl_car_reflections > 0.f ? 0.25f : -0.25f;
         }
     }
 
