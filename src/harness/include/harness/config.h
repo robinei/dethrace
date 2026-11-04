@@ -74,6 +74,7 @@ typedef struct tHarness_game_config {
     float gl_glow_strength;
     int gl_night;
     float gl_night_brightness;
+    float gl_night_haze; /* on the darkness tracks at night: a haze instead of the fade into darkness, its strength; 0 = the original fade */
     float gl_headlight_strength;
     float gl_headlight_haze;
     int gl_ssao;

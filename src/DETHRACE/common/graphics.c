@@ -2212,9 +2212,11 @@ static void SetNightLighting(br_actor* pCamera) {
         up_f[2] = dv.v[2];
         {
             // aerial perspective on tracks without fog or darkness, most of it by the original draw distance (not
-            // the extended one, which most of the view is well within)
+            // the extended one, which most of the view is well within); at night the sky's colour is that of the
+            // haze the darkness becomes
             float haze[3];
-            int hazy = gProgram_state.current_depth_effect.type == eDepth_effect_none && GetSkyHazeColour(haze);
+            int hazy = (gProgram_state.current_depth_effect.type == eDepth_effect_none || (gNight && gProgram_state.current_depth_effect.type == eDepth_effect_darkness))
+                && GetSkyHazeColour(haze);
             Harness_Hook_SceneSurface(sun_f, up_f, gNight, hazy ? haze : NULL, gYon_multiplier * GetYon());
         }
     }

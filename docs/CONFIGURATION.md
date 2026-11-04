@@ -67,6 +67,10 @@ GlowStrength = 0.7
 ; (more in fog). With Glow on, tail lights glow brighter while a car brakes, day and night
 Night = auto
 NightBrightness = 0.3
+; NightHaze: on the tracks with darkness, the darkness becomes a haze in the sky's colour by the horizon (black
+; in the mines), of this strength, that lights shine through; only the far edge fades out entirely, so more of
+; the night is seen. 0 = the original fade into darkness
+NightHaze = 0.5
 HeadlightStrength = 2
 HeadlightHaze = 1
 

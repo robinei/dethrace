@@ -312,6 +312,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_glow_strength = 0.7f;
     harness_game_config.gl_night = 2;
     harness_game_config.gl_night_brightness = 0.3f;
+    harness_game_config.gl_night_haze = 0.5f;
     harness_game_config.gl_headlight_strength = 2.0f;
     harness_game_config.gl_headlight_haze = 1.0f;
     harness_game_config.gl_ssao = 0;
@@ -671,6 +672,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
     } else if (MATCH("General", "Night")) {
         // 0 = off, 1 = on, auto = on tracks with the darkness depth cue
         harness_game_config.gl_night = strcmp(value, "auto") == 0 ? 2 : (value[0] == '1');
+    } else if (MATCH("General", "NightHaze")) {
+        harness_game_config.gl_night_haze = ClampConfigFloat(atof(value), 0.0f, 1.0f);
     } else if (MATCH("General", "NightBrightness")) {
         harness_game_config.gl_night_brightness = ClampConfigFloat(atof(value), 0.0f, 1.0f);
     } else if (MATCH("General", "SSAO")) {
@@ -1175,8 +1178,13 @@ void Harness_Hook_SceneSurface(const float* sun, const float* up, int night, con
         scene_surface[11] = 0.35f * harness_game_config.gl_haze;
     } else {
         scene_surface[11] = 0.f;
+        // at night: the haze the darkness becomes, in the sky's colour by the horizon (black where there is none)
+        scene_surface[8] = night && haze_colour != NULL ? haze_colour[0] : 0.f;
+        scene_surface[9] = night && haze_colour != NULL ? haze_colour[1] : 0.f;
+        scene_surface[10] = night && haze_colour != NULL ? haze_colour[2] : 0.f;
     }
     scene_surface[12] = haze_distance;
+    scene_surface[14] = night ? harness_game_config.gl_night_haze : 0.f;
     // relief by the sun, so by day with sun shading
     scene_surface[13] = night || harness_game_config.gl_sun_shading <= 0.f ? 0.f : harness_game_config.gl_relief;
 }
@@ -1313,7 +1321,7 @@ int Harness_GL_SceneSurface(float* params) {
         return 0;
     }
     memcpy(params, scene_surface, sizeof(scene_surface));
-    return scene_surface[3] > 0.f || scene_surface[7] > 0.f || scene_surface[11] > 0.f || scene_surface[13] > 0.f;
+    return scene_surface[3] > 0.f || scene_surface[7] > 0.f || scene_surface[11] > 0.f || scene_surface[13] > 0.f || scene_surface[14] > 0.f;
 }
 
 void Harness_Hook_SceneLighting(float brightness, const float* lights, int count) {
