@@ -149,7 +149,10 @@ int Harness_Hook_PostProcessBegin(br_pixelmap* screen);
 // pedestrian sprites, smoke and sparks drawn after it)
 void Harness_Hook_PostProcessDepthSnapshot(void);
 // speed: 0..1 for the speed blur; fires: camera space position and strength of up to 8 fires (heat shimmer)
-void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* fires, int fire_count);
+void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* up, const float* fires, int fire_count);
+// The surfaces with this texture mirror their surroundings (ice) in the OpenGL renderer; NULL forgets them all
+void Harness_Hook_ReflectiveTexture(const char* identifier);
+float Harness_GL_TextureReflect(const char* identifier);
 
 // Night (OpenGL mode): the 3d scenes are darkened and lit by lights (headlights, fires)
 // brightness 1 = normal; lights are BR_GL_SCENE_LIGHT_FLOATS floats each, see glrend's scene_lighting callback

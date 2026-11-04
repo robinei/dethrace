@@ -98,6 +98,18 @@ Haze = 0
 ; Only used in 3dfx mode. Soft round shadows on the ground under the pedestrians nearby
 PedestrianShadows = 0
 
+; Only used in 3dfx mode. Flashes: sparks light up their surroundings for a moment as they burst out, and so
+; does a fire breaking out, day and night. The strength, 0 disables
+Flashes = 0
+
+; Only used in 3dfx mode, needs Glow. At night the ground looks wet: up-facing surfaces reflect the glowing
+; lights (neon, lit windows, lamps, car lights), stretched towards the viewer. The strength, 0 disables
+WetRoads = 0
+
+; Only used in 3dfx mode, needs Glow. Ice (the surfaces with hardly any grip) mirrors the scenery, cars and sky
+; around it, softly and more at grazing angles, day and night. The strength, 0 disables
+IceReflections = 0
+
 ; Only used in 3dfx mode. Widen (above 1) or narrow (below 1) the external camera view. 1.2 is about 10
 ; degrees wider. The cockpit view is unchanged
 FOVScale = 1

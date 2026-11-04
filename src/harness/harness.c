@@ -339,6 +339,9 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_surface_variation = 0.f;
     harness_game_config.gl_sun_shading = 0.f;
     harness_game_config.gl_haze = 0.f;
+    harness_game_config.gl_flashes = 0.f;
+    harness_game_config.gl_wet_roads = 0.f;
+    harness_game_config.gl_ice_reflections = 0.f;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -591,6 +594,12 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_surface_variation = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "Haze")) {
         harness_game_config.gl_haze = ClampConfigFloat(atof(value), 0.0f, 4.0f);
+    } else if (MATCH("General", "Flashes")) {
+        harness_game_config.gl_flashes = ClampConfigFloat(atof(value), 0.0f, 4.0f);
+    } else if (MATCH("General", "IceReflections")) {
+        harness_game_config.gl_ice_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
+    } else if (MATCH("General", "WetRoads")) {
+        harness_game_config.gl_wet_roads = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "SunShading")) {
         harness_game_config.gl_sun_shading = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "PedestrianShadows")) {
@@ -880,6 +889,9 @@ typedef struct br_gl_post_params {
     float grade;
     float night;
     float time;
+    float wet;
+    float up[3];
+    float ice;
     int shimmer_count;
     float shimmers[4 * 8];
 } br_gl_post_params;
@@ -891,7 +903,8 @@ void BR_PUBLIC_ENTRY BrGLPostProcessEnd(br_pixelmap* screen, const br_gl_post_pa
 int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
     if (!harness_game_config.opengl_3dfx_mode || screen == NULL
         || !(harness_game_config.gl_depth_of_field || harness_game_config.gl_glow || harness_game_config.gl_ssao
-            || harness_game_config.gl_speed_blur || harness_game_config.gl_heat_shimmer || harness_game_config.gl_colour_grading)) {
+            || harness_game_config.gl_speed_blur || harness_game_config.gl_heat_shimmer || harness_game_config.gl_colour_grading
+            || ((harness_game_config.gl_wet_roads > 0.f || harness_game_config.gl_ice_reflections > 0.f) && harness_game_config.gl_glow))) {
         return 0;
     }
     if (BrGLPostProcessBegin(screen, harness_game_config.gl_glow) != BRE_OK) {
@@ -907,7 +920,7 @@ void Harness_Hook_PostProcessDepthSnapshot(void) {
     }
 }
 
-void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* fires, int fire_count) {
+void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* up, const float* fires, int fire_count) {
     br_gl_post_params params;
     int vx, vy;
     float sx, sy;
@@ -930,6 +943,12 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
     params.speed = harness_game_config.gl_speed_blur ? speed : 0.0f;
     params.grade = harness_game_config.gl_colour_grading ? 1.0f : 0.0f;
     params.night = night ? 1.0f : 0.0f;
+    // the reflections are of the glowing lights
+    params.wet = night && harness_game_config.gl_glow ? harness_game_config.gl_wet_roads : 0.0f;
+    if (up != NULL) {
+        memcpy(params.up, up, sizeof(params.up));
+    }
+    params.ice = harness_game_config.gl_glow ? harness_game_config.gl_ice_reflections : 0.0f;
     params.time = gHarness_platform.GetTicks != NULL ? (gHarness_platform.GetTicks() % 1000000) / 1000.0f : 0.0f;
     if (harness_game_config.gl_heat_shimmer && fires != NULL) {
         params.shimmer_count = fire_count < 8 ? fire_count : 8;
@@ -1039,6 +1058,33 @@ void Harness_Hook_SceneSurface(const float* sun, const float* up, int night, con
         scene_surface[11] = 0.f;
     }
     scene_surface[12] = haze_distance;
+}
+
+static char reflective_textures[32][32];
+static int reflective_texture_count;
+
+void Harness_Hook_ReflectiveTexture(const char* identifier) {
+    if (identifier == NULL) {
+        reflective_texture_count = 0;
+    } else if (reflective_texture_count < 32) {
+        strncpy(reflective_textures[reflective_texture_count], identifier, sizeof(reflective_textures[0]) - 1);
+        reflective_textures[reflective_texture_count][sizeof(reflective_textures[0]) - 1] = '\0';
+        reflective_texture_count++;
+    }
+}
+
+float Harness_GL_TextureReflect(const char* identifier) {
+    int i;
+
+    if (harness_game_config.gl_ice_reflections <= 0.f) {
+        return 0.f;
+    }
+    for (i = 0; i < reflective_texture_count; i++) {
+        if (strcasecmp(reflective_textures[i], identifier) == 0) {
+            return 1.f;
+        }
+    }
+    return 0.f;
 }
 
 static int drawing_sky;

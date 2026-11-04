@@ -627,6 +627,7 @@ void PDAllocateScreenAndBack(void) {
             gl_callbacks.scene_lighting = Harness_GL_SceneLighting;
             gl_callbacks.scene_surface = Harness_GL_SceneSurface;
             gl_callbacks.depth_write = Harness_GL_DepthWrite;
+            gl_callbacks.texture_reflect = Harness_GL_TextureReflect;
             gl_callbacks.fog_distance = harness_game_config.gl_distance_fog;
             gl_callbacks.get_viewport = gHarness_platform.GetViewport;
             gl_callbacks.adjust_render_viewport = Harness_GL_AdjustRenderViewport;

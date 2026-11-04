@@ -97,6 +97,9 @@ typedef struct tHarness_game_config {
     float gl_surface_variation;
     float gl_sun_shading;
     float gl_haze;
+    float gl_flashes;   /* strength of the light flashes from sparks and fires breaking out, 0 = off */
+    float gl_wet_roads; /* strength of the lights' reflections on the ground at night, 0 = off */
+    float gl_ice_reflections; /* strength of the mirror image on ice, 0 = off */
     float camera_smoothing; /* seconds: how softly the external camera follows the car's turns, 0 = rigidly */
     int gamepad_rumble;
     int vsync; /* 1 = on, 0 = off, -1 = adaptive */

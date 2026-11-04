@@ -1969,6 +1969,100 @@ static void UpdateBrakeLights(tCar_spec* pCar, br_actor* pActor) {
     }
 }
 
+// Added by dethrace: flashes, day and night: short lights (with a negative haze: lighting beyond the daylight
+// brightness) where sparks fly, brightest as they burst out, and where a fire breaks out
+static int AddFlashes(float* pLights, int pCount, br_actor* pCamera) {
+    static int burning[COUNT_OF(gSmoke_column)];
+    static tU32 burning_since[COUNT_OF(gSmoke_column)];
+    br_vector3 centre[4];
+    br_scalar weight[4];
+    br_matrix34 to_camera;
+    br_vector3 pos;
+    br_vector3 pv;
+    br_scalar w;
+    br_scalar strength;
+    tU32 now;
+    int clusters;
+    int i;
+    int c;
+    int on;
+
+    strength = harness_game_config.gl_flashes;
+    if (strength <= 0.f) {
+        return pCount;
+    }
+    BrActorToActorMatrix34(&to_camera, gUniverse_actor, pCamera);
+
+    // the sparks, gathered into a few clusters by where they are, each weighted by how young its sparks are
+    clusters = 0;
+    for (i = 0; i < COUNT_OF(gSparks); i++) {
+        if (!((gSpark_flags >> i) & 1)) {
+            continue;
+        }
+        // (in the action replay the sparks don't age: just those showing)
+        w = gAction_replay_mode ? 0.3f : (gSparks[i].count - 600) / 400.f;
+        if (w <= 0.f) {
+            continue;
+        }
+        w = w * w;
+        if (gSparks[i].car != NULL) {
+            BrMatrix34ApplyP(&pos, &gSparks[i].pos, &gSparks[i].car->car_master_actor->t.t.mat);
+        } else {
+            BrVector3Copy(&pos, &gSparks[i].pos);
+        }
+        for (c = 0; c < clusters; c++) {
+            BrVector3Sub(&pv, &pos, &centre[c]);
+            if (BrVector3LengthSquared(&pv) < 0.6f * 0.6f) {
+                break;
+            }
+        }
+        if (c == clusters) {
+            if (clusters == COUNT_OF(centre)) {
+                continue;
+            }
+            BrVector3Copy(&centre[c], &pos);
+            weight[c] = w;
+            clusters++;
+        } else {
+            // the cluster's centre: the weighted average of its sparks
+            BrVector3Scale(&centre[c], &centre[c], weight[c] / (weight[c] + w));
+            BrVector3Scale(&pv, &pos, w / (weight[c] + w));
+            BrVector3Accumulate(&centre[c], &pv);
+            weight[c] += w;
+        }
+    }
+    for (c = 0; c < clusters; c++) {
+        BrMatrix34ApplyP(&pv, &centre[c], &to_camera);
+        if (BrVector3LengthSquared(&pv) > 60.f * 60.f) {
+            continue;
+        }
+        pCount = AddSceneLight(pLights, pCount, &pv, 3.f, NULL, strength * MIN(1.6f, 0.3f * weight[c]),
+            1.f, 0.8f, 0.5f, -1.f);
+    }
+
+    // fires breaking out: a bright orange flash, fading over most of a second
+    now = GetTotalTime();
+    for (i = 0; i < COUNT_OF(gSmoke_column); i++) {
+        on = ((gColumn_flags >> i) & 1) && gSmoke_column[i].colour == 0;
+        if (on && !burning[i]) {
+            burning_since[i] = now;
+        }
+        burning[i] = on;
+        if (!on || now - burning_since[i] >= 800) {
+            continue;
+        }
+        BrMatrix34ApplyP(&pv, &gSmoke_column[i].pos, &to_camera);
+        if (BrVector3LengthSquared(&pv) > 60.f * 60.f) {
+            continue;
+        }
+        pv.v[1] += 0.15f;
+        w = 1.f - (now - burning_since[i]) / 800.f;
+        pCount = AddSceneLight(pLights, pCount, &pv, 6.f, NULL, strength * 2.5f * w * w,
+            1.f, 0.6f, 0.25f, -1.f);
+    }
+    return pCount;
+}
+
 // Added by dethrace: lights for the 3d view from `pCamera` at night: the cars' headlights (showing as beams in
 // the air, more so in fog) and fires on burning cars. Also brake lights, day and night.
 static void SetNightLighting(br_actor* pCamera) {
@@ -2052,6 +2146,7 @@ static void SetNightLighting(br_actor* pCamera) {
             count = AddSceneLight(lights, count, &pv, 7.f, NULL, 2.4f * flicker, 1.f, 0.55f, 0.2f, 0.f);
         }
     }
+    count = AddFlashes(lights, count, pCamera);
     if (harness_game_config.gl_pedestrian_shadows) {
         // soft blob shadows under the pedestrians: entries with a negative range, the radius, and the world's up
         // (in the camera's space) for their direction; the shader darkens the ground under them
@@ -2115,9 +2210,18 @@ static void PostProcessView(void) {
     float mph;
     br_matrix34 to_camera;
     br_vector3 pv;
+    br_vector3 d;
+    float up[3];
 
     fire_count = 0;
     BrActorToActorMatrix34(&to_camera, gUniverse_actor, gCamera);
+    // the world's up in view space, for the reflections on the ground
+    BrVector3Set(&d, 0.f, 1.f, 0.f);
+    BrMatrix34ApplyV(&pv, &d, &to_camera);
+    BrVector3Normalise(&pv, &pv);
+    up[0] = pv.v[0];
+    up[1] = pv.v[1];
+    up[2] = pv.v[2];
     for (i = 0; i < COUNT_OF(gSmoke_column) && fire_count < 8; i++) {
         if (!((gColumn_flags >> i) & 1) || gSmoke_column[i].colour != 0) {
             continue;
@@ -2136,7 +2240,7 @@ static void PostProcessView(void) {
     mph = fabsf(gCar_to_view->speedo_speed) * WORLD_SCALE / 1600.f * 3600000.f;
     // (the draw distance, which the depth of field goes by, not the far plane, which DrawEverything moves out)
     Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, MIN(((br_camera*)gCamera->type_data)->yon_z, gYon_multiplier * gCamera_yon),
-        gAction_replay_mode ? 0.f : MAX(0.f, MIN(1.f, (mph - 70.f) / 80.f)), gNight, fires, fire_count);
+        gAction_replay_mode ? 0.f : MAX(0.f, MIN(1.f, (mph - 70.f) / 80.f)), gNight, up, fires, fire_count);
 }
 #endif
 

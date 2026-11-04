@@ -16,6 +16,7 @@
 #include "globvrpb.h"
 #include "graphics.h"
 #include "harness/config.h"
+#include "harness/hooks.h"
 #include "harness/trace.h"
 #include "input.h"
 #include "loading.h"
@@ -2555,6 +2556,25 @@ void FreeExceptions(void) {
 
 #endif
 
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: a material is of the surface (material modifier) its name starts with the digit of; those
+// with hardly any grip are ice
+static br_uint_32 RegisterIcyMaterial(br_material* pMaterial, void* pArg) {
+    tRace_info* race = pArg;
+    int m;
+
+    if (pMaterial->identifier == NULL || pMaterial->colour_map == NULL || pMaterial->colour_map->identifier == NULL
+        || !isdigit((unsigned char)pMaterial->identifier[0])) {
+        return 0;
+    }
+    m = pMaterial->identifier[0] - '0' + 1;
+    if (race->material_modifiers[m].tyre_road_friction < 0.2f) {
+        Harness_Hook_ReflectiveTexture(pMaterial->colour_map->identifier);
+    }
+    return 0;
+}
+#endif
+
 // IDA: void __usercall LoadTrack(char *pFile_name@<EAX>, tTrack_spec *pTrack_spec@<EDX>, tRace_info *pRace_info@<EBX>)
 // FUNCTION: CARM95 0x0043a136
 void LoadTrack(char* pFile_name, tTrack_spec* pTrack_spec, tRace_info* pRace_info) {
@@ -3061,6 +3081,11 @@ void LoadTrack(char* pFile_name, tTrack_spec* pTrack_spec, tRace_info* pRace_inf
     pRace_info->material_modifiers[i].smoke_type = 1;
     pRace_info->material_modifiers[i].skid_mark_material = 0;
     gDefault_water_spec_vol->material_modifier_index = i;
+#ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: the textures of the slippery (icy) surfaces mirror their surroundings
+    Harness_Hook_ReflectiveTexture(NULL);
+    BrMaterialEnum(NULL, RegisterIcyMaterial, pRace_info);
+#endif
     num_non_cars = GetAnInt(f);
     non_car = BrMemCalloc(num_non_cars + 5, sizeof(tNon_car_spec), kMem_non_car_spec);
     if (!non_car && num_non_cars) {
