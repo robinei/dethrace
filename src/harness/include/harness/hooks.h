@@ -79,6 +79,11 @@ typedef struct tHarness_platform {
     void (*GetGamepadState)(tHarness_gamepad_state* state);
     // 0..1 strength of the low (heavy) and high (light) frequency motors
     void (*SetGamepadRumble)(float low_frequency, float high_frequency, unsigned duration_ms);
+    // Optional. The number of displays (for the map's own window, MapWindow = auto)
+    int (*DisplayCount)(void);
+    // Optional. Show this image (0x00RRGGBB pixels, width x height) in the map's own window, opening it if
+    // needed (titled "Dethrace map"); NULL closes the window
+    void (*MapWindow)(const br_uint_32* pixels, int width, int height);
 
 } tHarness_platform;
 
@@ -149,6 +154,16 @@ int Harness_Hook_PostProcessBegin(br_pixelmap* screen);
 // pedestrian sprites, smoke and sparks drawn after it)
 void Harness_Hook_PostProcessDepthSnapshot(void);
 void Harness_Hook_SoftParticles(int on);
+// The map's own window (MapWindow): whether the game should draw the map for it; the map image to show (8 bit
+// pixels, row_bytes apart, the rectangle x, y, width, height of them; the 256 entry 0x00RRGGBB palette), and
+// the image shown outside races (the loading screen)
+int Harness_Hook_MapWindowWanted(void);
+void Harness_Hook_MapWindow(const void* pixels, int row_bytes, int x, int y, int width, int height, const void* palette);
+void Harness_Hook_MapWindowSplash(const void* pixels, int row_bytes, int x, int y, int width, int height, const void* palette);
+// (by the platform, each frame: shows the latest map, or the splash outside races)
+void Harness_MapWindowUpdate(void);
+// (by the platform: whether the map's own window is to be opened)
+int Harness_MapWindowEnabled(void);
 void Harness_Hook_Sprites(int on);
 int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, int level, const float* world_to_light);
 void Harness_Hook_ShadowPassEnd(br_pixelmap* screen);

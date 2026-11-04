@@ -11,6 +11,15 @@
 SDL_COMPILE_TIME_ASSERT(sdl2_platform_requires_SDL2, SDL_MAJOR_VERSION == 2);
 
 static SDL_Window* window;
+// the map's own window (MapWindow): no OpenGL, the image drawn into its surface; the image it shows (the
+// harness's), so it can be drawn again when the window changes; closed by the user: not opened again
+static SDL_Window* map_window;
+static SDL_Renderer* map_renderer;
+static SDL_Texture* map_texture;
+static int map_texture_width, map_texture_height;
+static const br_uint_32* map_window_pixels;
+static int map_window_width, map_window_height;
+static int map_window_closed;
 static SDL_Renderer* renderer;
 static SDL_Texture* screen_texture;
 static br_uint_32 converted_palette[256];
@@ -142,6 +151,93 @@ static void open_first_game_controller(void) {
     }
 }
 
+static void map_window_draw(void) {
+    if (map_window == NULL || map_renderer == NULL || map_window_pixels == NULL) {
+        return;
+    }
+    if (map_texture == NULL || map_texture_width != map_window_width || map_texture_height != map_window_height) {
+        if (map_texture != NULL) {
+            SDL2_DestroyTexture(map_texture);
+        }
+        map_texture = SDL2_CreateTexture(map_renderer, SDL_PIXELFORMAT_RGB888, SDL_TEXTUREACCESS_STREAMING, map_window_width, map_window_height);
+        if (map_texture == NULL) {
+            return;
+        }
+        map_texture_width = map_window_width;
+        map_texture_height = map_window_height;
+        // scaled to fit, centred, black around
+        SDL2_RenderSetLogicalSize(map_renderer, map_window_width, map_window_height);
+    }
+    SDL2_UpdateTexture(map_texture, NULL, map_window_pixels, map_window_width * 4);
+    SDL2_RenderClear(map_renderer);
+    SDL2_RenderCopy(map_renderer, map_texture, NULL, NULL);
+    SDL2_RenderPresent(map_renderer);
+    // (the renderer draws with a GL context of its own: the game's current again)
+    if (gl_context != NULL) {
+        SDL2_GL_MakeCurrent(window, gl_context);
+    }
+}
+
+// opens the map's window (black until there is something to show), once
+static void map_window_open(void) {
+    if (map_window != NULL || map_window_closed) {
+        return;
+    }
+    map_window = SDL2_CreateWindow("Dethrace map", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 400, SDL_WINDOW_RESIZABLE);
+    if (map_window == NULL) {
+        LOG_WARN2("Failed to create the map's window: %s", SDL2_GetError());
+        map_window_closed = 1;
+        return;
+    }
+    // (drawn with a renderer: SDL has no window surfaces on Wayland; not waiting for vsync)
+    map_renderer = SDL2_CreateRenderer(map_window, -1, 0);
+    if (map_renderer == NULL) {
+        LOG_WARN2("No renderer for the map's window: %s", SDL2_GetError());
+    } else {
+        SDL2_RenderClear(map_renderer);
+        SDL2_RenderPresent(map_renderer);
+    }
+    // (the game keeps the focus, and its GL context)
+    SDL2_RaiseWindow(window);
+    if (gl_context != NULL) {
+        SDL2_GL_MakeCurrent(window, gl_context);
+    }
+}
+
+static void map_window_close(void) {
+    if (map_texture != NULL) {
+        SDL2_DestroyTexture(map_texture);
+        map_texture = NULL;
+    }
+    if (map_renderer != NULL) {
+        SDL2_DestroyRenderer(map_renderer);
+        map_renderer = NULL;
+    }
+    if (map_window != NULL) {
+        SDL2_DestroyWindow(map_window);
+        map_window = NULL;
+    }
+    if (gl_context != NULL) {
+        SDL2_GL_MakeCurrent(window, gl_context);
+    }
+}
+
+static void SDL2_Harness_MapWindow(const br_uint_32* pixels, int width, int height) {
+    if (pixels == NULL) {
+        map_window_close();
+        return;
+    }
+    map_window_pixels = pixels;
+    map_window_width = width;
+    map_window_height = height;
+    map_window_open();
+    map_window_draw();
+}
+
+static int SDL2_Harness_DisplayCount(void) {
+    return SDL2_GetNumVideoDisplays();
+}
+
 static void SDL2_Harness_ProcessWindowMessages(void) {
     SDL_Event event;
 
@@ -186,7 +282,23 @@ static void SDL2_Harness_ProcessWindowMessages(void) {
             break;
 
         case SDL_WINDOWEVENT:
-            if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+            if (map_window != NULL && event.window.windowID == SDL2_GetWindowID(map_window)) {
+                // the map's window: drawn again as it changes; closed, it stays closed
+                if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+                    map_window_close();
+                    map_window_closed = 1;
+                } else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED || event.window.event == SDL_WINDOWEVENT_EXPOSED) {
+                    map_window_draw();
+                }
+                break;
+            }
+            if (event.window.windowID != SDL2_GetWindowID(window)) {
+                break;
+            }
+            if (event.window.event == SDL_WINDOWEVENT_CLOSE && map_window != NULL) {
+                // (with the map's window open, closing the game's doesn't end SDL's last window)
+                QuitGame();
+            } else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
                 calculate_viewport(event.window.data1, event.window.data2);
             } else if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
                 Harness_Hook_FocusLost();
@@ -440,6 +552,10 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
         if (harness_game_config.supersampling) {
             enable_sample_shading();
         }
+        // the map's own window, from the start (MapWindow)
+        if (Harness_MapWindowEnabled()) {
+            map_window_open();
+        }
 
     } else {
         window = SDL2_CreateWindow(title,
@@ -484,6 +600,7 @@ static void SDL2_Harness_Swap(br_pixelmap* back_buffer) {
     br_uint_32* dest_pixels;
 
     SDL2_Harness_ProcessWindowMessages();
+    Harness_MapWindowUpdate();
 
     if (gl_context != NULL) {
         SDL2_GL_SwapWindow(window);
@@ -548,6 +665,8 @@ static int SDL2_Harness_Platform_Init(tHarness_platform* platform) {
     platform->GetViewport = SDL2_Harness_GetViewport;
     platform->GetGamepadState = SDL2_Harness_GetGamepadState;
     platform->SetGamepadRumble = SDL2_Harness_SetGamepadRumble;
+    platform->DisplayCount = SDL2_Harness_DisplayCount;
+    platform->MapWindow = SDL2_Harness_MapWindow;
     return 0;
 };
 

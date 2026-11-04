@@ -348,6 +348,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.camera_kick = 0.f;
     harness_game_config.gl_sun_highlights = 0.f;
     harness_game_config.gl_shadow_map_size = 8192;
+    harness_game_config.map_window = 0;
     harness_game_config.gl_round_wheels = 0;
     harness_game_config.gl_car_wear = 0.f;
     harness_game_config.gl_sun_shadows = 0.f;
@@ -621,6 +622,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_car_wear = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "RoundWheels")) {
         harness_game_config.gl_round_wheels = atoi(value) != 0;
+    } else if (MATCH("General", "MapWindow")) {
+        harness_game_config.map_window = strcasecmp(value, "auto") == 0 ? -1 : atoi(value) != 0;
     } else if (MATCH("General", "ShadowMapSize")) {
         // a power of two, 1024 to 16384 (and at most what the GPU allows, see BrGLShadowPassBegin)
         int size = 1024;
@@ -1451,4 +1454,86 @@ int Harness_Hook_ScaleEmissionCountWithDt(float count, float dt_seconds) {
         emission_count++;
     }
     return emission_count;
+}
+
+// The map's own window (MapWindow): the latest map the game drew for it, and the splash for outside races,
+// converted to 0x00RRGGBB
+static br_uint_32* map_window_map;
+static int map_window_map_w, map_window_map_h;
+static br_uint_32 map_window_map_time;
+static br_uint_32* map_window_splash;
+static int map_window_splash_w, map_window_splash_h;
+static int map_window_showing; // 0 nothing, 1 the map, 2 the splash
+static int map_window_dirty;
+
+int Harness_MapWindowEnabled(void) {
+    if (gHarness_platform.MapWindow == NULL || !harness_game_config.opengl_3dfx_mode) {
+        return 0;
+    }
+    if (harness_game_config.map_window < 0) {
+        return gHarness_platform.DisplayCount != NULL && gHarness_platform.DisplayCount() > 1;
+    }
+    return harness_game_config.map_window;
+}
+
+static void MapWindowConvert(br_uint_32** out, int* out_w, int* out_h, const void* pixels, int row_bytes, int x, int y, int width, int height, const void* palette) {
+    const br_uint_8* src = pixels;
+    const br_uint_32* pal = palette;
+    int i, j;
+
+    if (*out == NULL || *out_w != width || *out_h != height) {
+        free(*out);
+        *out = malloc(sizeof(br_uint_32) * width * height);
+        if (*out == NULL) {
+            return;
+        }
+        *out_w = width;
+        *out_h = height;
+    }
+    for (j = 0; j < height; j++) {
+        for (i = 0; i < width; i++) {
+            (*out)[j * width + i] = pal[src[(y + j) * row_bytes + x + i]] & 0xffffff;
+        }
+    }
+}
+
+int Harness_Hook_MapWindowWanted(void) {
+    return Harness_MapWindowEnabled();
+}
+
+void Harness_Hook_MapWindow(const void* pixels, int row_bytes, int x, int y, int width, int height, const void* palette) {
+    if (!Harness_MapWindowEnabled()) {
+        return;
+    }
+    MapWindowConvert(&map_window_map, &map_window_map_w, &map_window_map_h, pixels, row_bytes, x, y, width, height, palette);
+    map_window_map_time = gHarness_platform.GetTicks();
+    map_window_showing = 1;
+    map_window_dirty = 1;
+}
+
+void Harness_Hook_MapWindowSplash(const void* pixels, int row_bytes, int x, int y, int width, int height, const void* palette) {
+    MapWindowConvert(&map_window_splash, &map_window_splash_w, &map_window_splash_h, pixels, row_bytes, x, y, width, height, palette);
+    if (map_window_showing == 2) {
+        map_window_dirty = 1;
+    }
+}
+
+void Harness_MapWindowUpdate(void) {
+    if (!Harness_MapWindowEnabled()) {
+        return;
+    }
+    // outside races (no map for half a second): the splash
+    if (map_window_showing != 2 && (map_window_showing == 0 || gHarness_platform.GetTicks() - map_window_map_time > 500) && map_window_splash != NULL) {
+        map_window_showing = 2;
+        map_window_dirty = 1;
+    }
+    if (!map_window_dirty) {
+        return;
+    }
+    map_window_dirty = 0;
+    if (map_window_showing == 1 && map_window_map != NULL) {
+        gHarness_platform.MapWindow(map_window_map, map_window_map_w, map_window_map_h);
+    } else if (map_window_showing == 2 && map_window_splash != NULL) {
+        gHarness_platform.MapWindow(map_window_splash, map_window_splash_w, map_window_splash_h);
+    }
 }

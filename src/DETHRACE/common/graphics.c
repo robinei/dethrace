@@ -1014,6 +1014,18 @@ void InitializePalettes(void) {
     gPalette_conversion_table = BrTableFind("FLC2REND.TAB");
     gRender_shade_table = BrTableFind("DRRENDER.TAB");
     gEval_1 = LoadPixelmap("Evalu01.PIX");
+#ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: the map's own window shows the loading screen from the start (until the first race)
+    if (Harness_Hook_MapWindowWanted()) {
+        br_pixelmap* splash = LoadPixelmap(gProgram_state.sausage_eater_mode ? harness_game_info.defines.GERMAN_LOADSCRN : "LOADSCRN.PIX");
+        if (splash != NULL) {
+            if (splash->type == BR_PMT_INDEX_8) {
+                Harness_Hook_MapWindowSplash(splash->pixels, splash->row_bytes, 0, 0, splash->width, splash->height, gRender_palette->pixels);
+            }
+            BrPixelmapFree(splash);
+        }
+    }
+#endif
 }
 
 // IDA: void __usercall SwitchToPalette(char *pPal_name@<EAX>)
@@ -2525,6 +2537,99 @@ static int DrawSunShadowMap(void) {
 }
 #endif
 
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: the map in a window of its own (MapWindow, eg. on a second screen): the race's map with the
+// blips as map mode draws them (checkpoint, pedestrians, cars), drawn into a copy of it (as the screen, laid out
+// as map mode's) and handed to the harness, at most 30 times a second
+static void DrawMapWindow(void) {
+    static br_pixelmap* screen;
+    static tU32 last;
+    br_pixelmap* real_back_screen;
+    int real_devious_2d;
+    tU32 the_time;
+    int width, height, top, i, flags, ped_type, cat, car_count;
+    br_vector3 pos;
+    br_vector3* car_pos;
+    tCar_spec* car;
+
+    if (gCurrent_race.map_image == NULL || !Harness_Hook_MapWindowWanted()) {
+        return;
+    }
+    the_time = PDGetTotalTime();
+    if (the_time - last < 33) {
+        return;
+    }
+    last = the_time;
+    // (in map mode's layout, which the blips' positions are for: the map doubled below a 40 pixel band in high
+    // resolution)
+    width = gReal_graf_data_index ? 2 * gCurrent_race.map_image->width : gCurrent_race.map_image->width;
+    height = gReal_graf_data_index ? 2 * gCurrent_race.map_image->height : gCurrent_race.map_image->height;
+    top = gReal_graf_data_index ? 40 : 0;
+    if (screen == NULL || screen->width != width || screen->height != height + top) {
+        if (screen != NULL) {
+            BrPixelmapFree(screen);
+        }
+        screen = BrPixelmapAllocate(BR_PMT_INDEX_8, width, height + top, NULL, BR_PMAF_NORMAL);
+        if (screen == NULL) {
+            return;
+        }
+    }
+    BrPixelmapFill(screen, 0);
+    if (gReal_graf_data_index) {
+        DRPixelmapDoubledCopy(screen, gCurrent_race.map_image, gCurrent_race.map_image->width, gCurrent_race.map_image->height, 0, top);
+    } else {
+        BrPixelmapCopy(screen, gCurrent_race.map_image);
+    }
+    real_back_screen = gBack_screen;
+    gBack_screen = screen;
+    // (into the copy's pixels: not through the 3d device)
+    real_devious_2d = gDevious_2d;
+    gDevious_2d = 0;
+    // (as RenderAFrame draws them in map mode)
+    if (gNet_mode != eNet_mode_none) {
+        if (gCurrent_net_game->type == eNet_game_type_checkpoint) {
+            flags = gNet_players[gThis_net_player_index].score;
+            for (i = 0; gCurrent_race.check_point_count > i; ++i) {
+                if ((flags & 1) != 0) {
+                    FlashyMapCheckpoint(i, the_time);
+                }
+                flags >>= 1;
+            }
+        } else if (gCurrent_net_game->type == eNet_game_type_sudden_death
+            && gNet_players[gThis_net_player_index].score >= 0) {
+            FlashyMapCheckpoint(gNet_players[gThis_net_player_index].score % gCurrent_race.check_point_count, the_time);
+        }
+    } else {
+        FlashyMapCheckpoint(gCheckpoint - 1, the_time);
+    }
+    if (gShow_peds_on_map || (gNet_mode != eNet_mode_none && gCurrent_net_game->options.show_powerups_on_map)) {
+        for (i = 0; i < GetPedCount(); i++) {
+            ped_type = GetPedPosition(i, &pos);
+            if (ped_type > 0 && gShow_peds_on_map) {
+                DrawMapSmallBlip(the_time, &pos, 52);
+            } else if (ped_type < 0 && (gNet_mode != eNet_mode_none && gCurrent_net_game->options.show_powerups_on_map)) {
+                DrawMapSmallBlip(the_time, &pos, 4);
+            }
+        }
+    }
+    for (cat = gShow_opponents ? eVehicle_opponent : eVehicle_self; cat >= eVehicle_self; cat--) {
+        car_count = cat == eVehicle_self ? 1 : GetCarCount(cat);
+        for (i = 0; i < car_count; i++) {
+            car = cat == eVehicle_self ? &gProgram_state.current_car : GetCarSpec(cat, i);
+            if (gNet_mode == eNet_mode_none || (!car->knackered && !NetPlayerFromCar(car)->wasted)) {
+                car_pos = cat == eVehicle_self ? &gSelf->t.t.euler.t : &car->car_master_actor->t.t.euler.t;
+                DrawMapBlip(car, the_time, &car->car_master_actor->t.t.mat, car_pos,
+                    gNet_mode ? car->shrapnel_material[0]->index_range + car->shrapnel_material[0]->index_base - 1
+                              : (car->knackered ? 0 : gMap_colours[cat]));
+            }
+        }
+    }
+    gBack_screen = real_back_screen;
+    gDevious_2d = real_devious_2d;
+    Harness_Hook_MapWindow(screen->pixels, screen->row_bytes, 0, top, width, height, gRender_palette->pixels);
+}
+#endif
+
 void RenderAFrame(int pDepth_mask_on) {
     int cat;
     int i;
@@ -2573,6 +2678,10 @@ void RenderAFrame(int pDepth_mask_on) {
     gRender_screen->pixels = gBack_screen->pixels;
 #endif
 
+#ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: the map in its own window
+    DrawMapWindow();
+#endif
     the_time = GetTotalTime();
     old_pixels = gRender_screen->pixels;
     cockpit_on = gProgram_state.cockpit_on && gProgram_state.cockpit_image_index >= 0 && !gMap_mode;
@@ -3216,6 +3325,12 @@ void SplashScreenWith(char* pPixmap_name) {
             BrMapAdd(gCurrent_splash);
         }
     }
+#ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: the loading screen is also what the map's own window shows outside a race
+    if (gCurrent_splash != NULL && gCurrent_splash->type == BR_PMT_INDEX_8 && strcasecmp(pPixmap_name, "LOADSCRN.PIX") == 0) {
+        Harness_Hook_MapWindowSplash(gCurrent_splash->pixels, gCurrent_splash->row_bytes, 0, 0, gCurrent_splash->width, gCurrent_splash->height, gRender_palette->pixels);
+    }
+#endif
     if (gCurrent_splash != NULL) {
         BrPixelmapRectangleCopy(
             gBack_screen,

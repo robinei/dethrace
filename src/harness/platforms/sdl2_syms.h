@@ -51,6 +51,12 @@
     X(GameControllerRumble, int, (SDL_GameController*, Uint16, Uint16, Uint32))         \
     X(GameControllerGetJoystick, SDL_Joystick*, (SDL_GameController*))                  \
     X(JoystickInstanceID, SDL_JoystickID, (SDL_Joystick*))                              \
+    X(GetNumVideoDisplays, int, (void))                                                 \
+    X(RaiseWindow, void, (SDL_Window*))                                                 \
+    X(UpdateTexture, int, (SDL_Texture*, const SDL_Rect*, const void*, int))            \
+    X(DestroyTexture, void, (SDL_Texture*))                                             \
+    X(DestroyRenderer, void, (SDL_Renderer*))                                           \
+    X(GL_MakeCurrent, int, (SDL_Window*, SDL_GLContext))                                \
     X(free, void, (void*))
 
 #endif /* sdl2_syms_h */

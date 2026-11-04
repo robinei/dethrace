@@ -145,6 +145,11 @@ Weather = 0
 ; The strength, 0 disables
 CarWear = 0
 
+; Only used in 3dfx mode. The map in a window of its own (titled "Dethrace map", eg. for a second screen): the
+; race's map with the cars, checkpoint and pedestrians as map mode shows them, and the loading screen outside
+; races. 1, 0, or auto (when there is more than one display)
+MapWindow = 0
+
 ; Only used in 3dfx mode. The cars' wheels (low prisms in the original, eg. 8 sided) are made round: 32 sided,
 ; the same size and texture, the tread shaded smoothly. 0 = the original wheels
 RoundWheels = 0
