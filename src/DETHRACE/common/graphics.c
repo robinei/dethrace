@@ -2302,6 +2302,82 @@ static float KickCamera(int pExternal) {
 }
 #endif
 
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: the sun's shadow map (SunShadows). The whole world is drawn again from the sun (the same
+// direction as the sun shading), with a parallel camera covering a square about 60 units (~400m) across,
+// centred a little ahead of the camera. The camera never turns (the sun is fixed) and moves in whole shadow
+// texels, so the shadows stand still. Returns whether it was drawn
+#define SUN_SHADOW_MAP_SIZE 8192
+#define SUN_SHADOW_RADIUS 30.f
+static int DrawSunShadowMap(void) {
+    static br_actor* sun_camera;
+    br_camera* camera;
+    br_matrix34 view_to_world;
+    br_matrix34 world_to_light;
+    br_vector3 x, y, z, centre, ahead, tv;
+    float texel, cx, cy, cz;
+    int i;
+
+    if (gNight || gMap_mode || gUniverse_actor == NULL || gCamera == NULL) {
+        return 0;
+    }
+    if (sun_camera == NULL) {
+        sun_camera = BrActorAllocate(BR_ACTOR_CAMERA, NULL);
+        if (sun_camera == NULL) {
+            return 0;
+        }
+    }
+    camera = sun_camera->type_data;
+    camera->type = BR_CAMERA_PARALLEL;
+    camera->width = 2.f * SUN_SHADOW_RADIUS;
+    camera->height = 2.f * SUN_SHADOW_RADIUS;
+    camera->aspect = 1.f;
+    camera->hither_z = 1.f;
+    camera->yon_z = 200.f;
+
+    // looking down along the sun's light (its camera looks along -z)
+    BrVector3Set(&z, 0.45f, 0.8f, 0.4f);
+    BrVector3Normalise(&z, &z);
+    BrVector3Set(&x, z.v[2], 0.f, -z.v[0]);
+    BrVector3Normalise(&x, &x);
+    BrVector3Cross(&y, &z, &x);
+
+    // the centre: a third of the way out ahead of the camera, along the ground
+    BrActorToActorMatrix34(&view_to_world, gCamera, gUniverse_actor);
+    BrVector3Set(&ahead, -view_to_world.m[2][0], 0.f, -view_to_world.m[2][2]);
+    if (BrVector3LengthSquared(&ahead) < 1e-6f) {
+        BrVector3Set(&ahead, 0.f, 0.f, -1.f);
+    }
+    BrVector3Normalise(&ahead, &ahead);
+    BrVector3Scale(&tv, &ahead, SUN_SHADOW_RADIUS * 0.33f);
+    BrVector3Add(&centre, (br_vector3*)view_to_world.m[3], &tv);
+    // in whole texels across the map
+    texel = 2.f * SUN_SHADOW_RADIUS / SUN_SHADOW_MAP_SIZE;
+    cx = floorf(BrVector3Dot(&centre, &x) / texel + 0.5f) * texel;
+    cy = floorf(BrVector3Dot(&centre, &y) / texel + 0.5f) * texel;
+    cz = BrVector3Dot(&centre, &z) + 100.f;
+
+    sun_camera->t.type = BR_TRANSFORM_MATRIX34;
+    for (i = 0; i < 3; i++) {
+        sun_camera->t.t.mat.m[0][i] = x.v[i];
+        sun_camera->t.t.mat.m[1][i] = y.v[i];
+        sun_camera->t.t.mat.m[2][i] = z.v[i];
+        sun_camera->t.t.mat.m[3][i] = x.v[i] * cx + y.v[i] * cy + z.v[i] * cz;
+    }
+    BrMatrix34Inverse(&world_to_light, &sun_camera->t.t.mat);
+    if (!Harness_Hook_ShadowPassBegin(gScreen, &world_to_light.m[0][0])) {
+        return 0;
+    }
+    BrActorAdd(gUniverse_actor, sun_camera);
+    BrZbSceneRenderBegin(gUniverse_actor, sun_camera, gRender_screen, gDepth_buffer);
+    BrZbSceneRenderAdd(gUniverse_actor);
+    BrZbSceneRenderEnd();
+    BrActorRemove(sun_camera);
+    Harness_Hook_ShadowPassEnd(gScreen);
+    return 1;
+}
+#endif
+
 void RenderAFrame(int pDepth_mask_on) {
     int cat;
     int i;
@@ -2330,6 +2406,7 @@ void RenderAFrame(int pDepth_mask_on) {
     br_scalar old_aspect;
     br_angle old_fov;
     float fov_kick = 1.f;
+    int sun_shadow_map = 0;
     int fade_to_sky;
     int post_processing;
 #endif
@@ -2486,6 +2563,8 @@ void RenderAFrame(int pDepth_mask_on) {
 #ifdef DETHRACE_3DFX_PATCH
     // Added by dethrace: night on tracks with the darkness depth cue (or always/never, see Night in the config)
     gNight = Harness_Hook_Night(gProgram_state.current_depth_effect.type == eDepth_effect_darkness);
+    // Added by dethrace: the sun's shadow map
+    sun_shadow_map = DrawSunShadowMap();
     // Added by dethrace: render the 3d view offscreen for post-processing effects (depth of field)
     post_processing = !gMap_mode && Harness_Hook_PostProcessBegin(gScreen);
     if (!gMap_mode) {
@@ -2520,6 +2599,10 @@ void RenderAFrame(int pDepth_mask_on) {
     for (i = 0; i < (gMap_mode && !gSmall_frames_are_slow ? 3 : 1); i++)
 #endif
     {
+#ifdef DETHRACE_3DFX_PATCH
+        // (with the sun's shadow map, the cars have their shadows from it)
+        if (!sun_shadow_map)
+#endif
         RenderShadows(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world);
         BrZbSceneRenderBegin(gUniverse_actor, gCamera, gRender_screen, gDepth_buffer);
 #ifdef DETHRACE_3DFX_PATCH

@@ -921,12 +921,17 @@ typedef struct br_gl_post_params {
     float paint;
     float weather[3];
     float sun[4];
+    float shadow_view[12];
     int shimmer_count;
     float shimmers[4 * 8];
 } br_gl_post_params;
 br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen, br_boolean glow);
 void BR_PUBLIC_ENTRY BrGLPostProcessDepthSnapshot(br_pixelmap* screen);
 void BR_PUBLIC_ENTRY BrGLPostProcessSoftParticles(br_pixelmap* screen, float distance);
+br_error BR_PUBLIC_ENTRY BrGLShadowPassBegin(br_pixelmap* screen, int size);
+void BR_PUBLIC_ENTRY BrGLShadowPassEnd(br_pixelmap* screen);
+// world to the camera of the sun's shadow map, for the post-processing
+static float shadow_view[12];
 static br_pixelmap* gPost_screen;
 // the sun, surface up, haze and relief of the scene (see Harness_Hook_SceneSurface)
 static float scene_surface[16];
@@ -955,6 +960,23 @@ void Harness_Hook_PostProcessDepthSnapshot(void) {
     if (gPost_screen != NULL && (harness_game_config.gl_ssao || harness_game_config.gl_soft_particles > 0.f)) {
         BrGLPostProcessDepthSnapshot(gPost_screen);
     }
+}
+
+// The sun's shadow map: whether to draw it (by day, with SunShadows), the scene drawn in between with the sun's
+// camera; pWorld_to_light: world to that camera
+int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, const float* world_to_light) {
+    if (!harness_game_config.opengl_3dfx_mode || harness_game_config.gl_sun_shadows <= 0.f || screen == NULL) {
+        return 0;
+    }
+    if (BrGLShadowPassBegin(screen, 8192) != BRE_OK) {
+        return 0;
+    }
+    memcpy(shadow_view, world_to_light, sizeof(shadow_view));
+    return 1;
+}
+
+void Harness_Hook_ShadowPassEnd(br_pixelmap* screen) {
+    BrGLShadowPassEnd(screen);
 }
 
 void Harness_Hook_SoftParticles(int on) {
@@ -1000,6 +1022,7 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
     params.paint = harness_game_config.gl_glow ? harness_game_config.gl_car_reflections : 0.0f;
     // the sun of the sun shading, by day, for the shadows
     memcpy(params.sun, scene_surface, sizeof(float) * 3);
+    memcpy(params.shadow_view, shadow_view, sizeof(params.shadow_view));
     params.sun[3] = night ? 0.0f : harness_game_config.gl_sun_shadows;
     // snow on the tracks with ice, rain at night elsewhere
     if (harness_game_config.gl_weather > 0.f && (reflective_texture_count > 0 || night)) {
