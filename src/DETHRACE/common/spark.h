@@ -4,15 +4,27 @@
 #include "dr_types.h"
 
 #ifdef DETHRACE_FIX_BUGS
-// Added by dethrace: more smoke puffs, so trails are not cut short when more cars smoke within the extended
-// draw distance. Puffs are tracked in a bit mask, so at most 64
-#define SMOKE_COUNT 64
-#define BR_SMOKE_COUNT 256
-typedef unsigned long long tSmoke_flags;
+// Added by dethrace: more smoke puffs, so trails (and dust and spray) are not cut short when more cars smoke
+// within the extended draw distance. Puffs are tracked in a bit set
+#define SMOKE_COUNT 256
+#define BR_SMOKE_COUNT 512
+typedef struct tSmoke_flags {
+    unsigned long long w[SMOKE_COUNT / 64];
+} tSmoke_flags;
+#define SMOKE_TEST(f, i) (((f).w[(i) >> 6] >> ((i) & 63)) & 1ull)
+#define SMOKE_SET(f, i) ((f).w[(i) >> 6] |= 1ull << ((i) & 63))
+#define SMOKE_CLEAR(f, i) ((f).w[(i) >> 6] &= ~(1ull << ((i) & 63)))
+#define SMOKE_NONE(f) (((f).w[0] | (f).w[1] | (f).w[2] | (f).w[3]) == 0)
+#define SMOKE_CLEAR_ALL(f) memset(&(f), 0, sizeof(f))
 #else
 #define SMOKE_COUNT 25
 #define BR_SMOKE_COUNT 30
 typedef int tSmoke_flags;
+#define SMOKE_TEST(f, i) ((f) & (1 << (i)))
+#define SMOKE_SET(f, i) ((f) |= (1 << (i)))
+#define SMOKE_CLEAR(f, i) ((f) &= ~(1 << (i)))
+#define SMOKE_NONE(f) ((f) == 0)
+#define SMOKE_CLEAR_ALL(f) ((f) = 0)
 #endif
 
 extern int gNext_spark;
@@ -115,6 +127,10 @@ void SmokeCircle3D(br_vector3* o, br_scalar r, br_scalar strength, br_scalar pAs
 void ReplaySmoke(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer, br_actor* pCamera);
 
 void GenerateContinuousSmoke(tCar_spec* pCar, int wheel, tU32 pTime);
+
+#ifdef DETHRACE_3DFX_PATCH
+void GenerateWetSpray(tCar_spec* pCar, int wheel, tU32 pTime, float pRain);
+#endif
 
 void DustRotate(void);
 

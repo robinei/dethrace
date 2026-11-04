@@ -1382,7 +1382,7 @@ void ReplaySmoke(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer, br_act
 #else
     for (i = 0; i < COUNT_OF(gSmoke_column); i++) {
 #endif
-        if (TEST_BIT(gSmoke_flags, i)) {
+        if (SMOKE_TEST(gSmoke_flags, i)) {
             aspect = 1.0 + (gSmoke[i].radius - .05f) / .25f * .5;
             if (gSmoke[i].type & 0x10) {
                 SmokeCircle3D(&gSmoke[i].pos, gSmoke[i].radius / aspect, gSmoke[i].strength, 1.f,
@@ -1490,7 +1490,7 @@ void RenderSmoke(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer, br_act
 #endif
 
     BrVector3Set(&tv, 0, 0, 0);
-    not_lonely = 0;
+    SMOKE_CLEAR_ALL(not_lonely);
 #ifdef DETHRACE_3DFX_PATCH
     if (gNo_2d_effects) {
         gBlend_actor->render_style = BR_RSTYLE_FACES;
@@ -1501,7 +1501,7 @@ void RenderSmoke(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer, br_act
 #endif
     DrawTheGlow(pRender_screen, pDepth_buffer, pCamera);
 
-    if (gSmoke_flags == 0) {
+    if (SMOKE_NONE(gSmoke_flags)) {
 #ifdef DETHRACE_3DFX_PATCH
         if (gNo_2d_effects) {
             BrActorRemove(gBlend_actor);
@@ -1526,11 +1526,11 @@ void RenderSmoke(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer, br_act
     }
     StartPipingSession(ePipe_chunk_smoke);
     for (i = 0; i < COUNT_OF(gSmoke); i++) {
-        if (!TEST_BIT(gSmoke_flags, i)) {
+        if (!SMOKE_TEST(gSmoke_flags, i)) {
             continue;
         }
         if (gSmoke[i].strength <= 0.0f) {
-            CLEAR_BIT(gSmoke_flags, i);
+            SMOKE_CLEAR(gSmoke_flags, i);
             continue;
         }
         if (gSmoke[i].time_sync) {
@@ -1542,26 +1542,26 @@ void RenderSmoke(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer, br_act
         BrVector3Accumulate(&gSmoke[i].pos, &tv);
     }
     for (i = 0; i < COUNT_OF(gSmoke); i++) {
-        if (!TEST_BIT(gSmoke_flags, i)) {
+        if (!SMOKE_TEST(gSmoke_flags, i)) {
             continue;
         }
         if ((gSmoke[i].type & 0xf) == 7) {
-            SET_BIT(not_lonely, i);
-        } else if (!TEST_BIT(not_lonely, i)) {
+            SMOKE_SET(not_lonely, i);
+        } else if (!SMOKE_TEST(not_lonely, i)) {
             for (j = i + 1; j < COUNT_OF(gSmoke); j++) {
-                if (!TEST_BIT(gSmoke_flags, j)) {
+                if (!SMOKE_TEST(gSmoke_flags, j)) {
                     continue;
                 }
                 BrVector3Sub(&tv, &gSmoke[i].pos, &gSmoke[i].pos);
                 ts = BrVector3LengthSquared(&tv);
                 if ((gSmoke[i].radius + gSmoke[j].radius) * (gSmoke[i].radius + gSmoke[j].radius) > ts) {
-                    SET_BIT(not_lonely, i);
-                    SET_BIT(not_lonely, j);
+                    SMOKE_SET(not_lonely, i);
+                    SMOKE_SET(not_lonely, j);
                     break;
                 }
             }
         }
-        if (!TEST_BIT(not_lonely, i)) {
+        if (!SMOKE_TEST(not_lonely, i)) {
             gSmoke[i].strength = gSmoke[i].strength / 2.0f;
         }
         aspect = (gSmoke[i].radius - 0.05f) / 0.25f * 0.5 + 1.0;
@@ -1579,7 +1579,7 @@ void RenderSmoke(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer, br_act
             gSmoke[i].radius = 0.3f;
         }
         if (gSmoke[i].strength <= 0.0f) {
-            CLEAR_BIT(gSmoke_flags, i);
+            SMOKE_CLEAR(gSmoke_flags, i);
             continue;
         }
         ts = 1.0f - pTime * 0.002f;
@@ -1651,7 +1651,7 @@ void CreatePuffOfSmoke(br_vector3* pos, br_vector3* v, br_scalar strength, br_sc
         strength = 1.0f;
     }
     gSmoke[gSmoke_num].strength = strength;
-    SET_BIT(gSmoke_flags, gSmoke_num);
+    SMOKE_SET(gSmoke_flags, gSmoke_num);
     gSmoke[gSmoke_num].time_sync = gMechanics_time_sync;
     gSmoke[gSmoke_num].type = pType;
     gSmoke[gSmoke_num].decay_factor = pDecay_factor;
@@ -1666,7 +1666,7 @@ void CreatePuffOfSmoke(br_vector3* pos, br_vector3* v, br_scalar strength, br_sc
 // FUNCTION: CARM95 0x0046a58d
 void ResetSmoke(void) {
 
-    gSmoke_flags = 0;
+    SMOKE_CLEAR_ALL(gSmoke_flags);
 }
 
 // IDA: void __usercall AdjustSmoke(int pIndex@<EAX>, tU8 pType@<EDX>, br_vector3 *pPos@<EBX>, br_scalar pRadius, br_scalar pStrength)
@@ -1677,7 +1677,7 @@ void AdjustSmoke(int pIndex, tU8 pType, br_vector3* pPos, br_scalar pRadius, br_
     gSmoke[pIndex].radius = pRadius;
     gSmoke[pIndex].strength = pStrength;
     BrVector3Copy(&gSmoke[pIndex].pos, pPos);
-    SET_BIT(gSmoke_flags, pIndex);
+    SMOKE_SET(gSmoke_flags, pIndex);
 }
 
 // IDA: void __cdecl ActorError()
