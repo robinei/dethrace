@@ -345,6 +345,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_water_reflections = 0.f;
     harness_game_config.gl_soft_particles = 0.f;
     harness_game_config.gl_car_reflections = 0.f;
+    harness_game_config.camera_kick = 0.f;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -603,6 +604,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_ice_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "WaterReflections")) {
         harness_game_config.gl_water_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
+    } else if (MATCH("General", "CameraKick")) {
+        harness_game_config.camera_kick = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "CarReflections")) {
         harness_game_config.gl_car_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "SoftParticles")) {

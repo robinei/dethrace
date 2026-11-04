@@ -2249,6 +2249,59 @@ static void PostProcessView(void) {
 
 // IDA: void __usercall RenderAFrame(int pDepth_mask_on@<EAX>)
 // FUNCTION: CARM95 0x004b59ce
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: CameraKick. Hits jolt the external camera for a moment (sudden changes of the car's
+// velocity, which the concussion wobble of heavy crashes adds to), and the view widens a little at speed.
+// Returns the field of view's scale; the camera's matrix is turned (RenderAFrame restores it)
+static float KickCamera(int pExternal) {
+    static br_vector3 last_v;
+    static tCar_spec* last_car;
+    static float shake;
+    static float wide;
+    static tU32 last_time;
+    tU32 now = GetTotalTime();
+    float dt, mph, dv, t, s;
+    br_vector3 d;
+
+    if (harness_game_config.camera_kick <= 0.f || gCar_to_view == NULL) {
+        return 1.f;
+    }
+    dt = MIN((now - last_time) / 1000.f, 0.1f);
+    last_time = now;
+    if (gCar_to_view != last_car || gAction_replay_mode) {
+        last_car = gCar_to_view;
+        BrVector3Copy(&last_v, &gCar_to_view->v);
+        shake = 0.f;
+    }
+    if (dt > 0.f) {
+        // the change of velocity since the last frame, in mph (v is in metres per second; a reset or recovery
+        // is far more, and ignored)
+        BrVector3Sub(&d, &gCar_to_view->v, &last_v);
+        dv = BrVector3Length(&d) * 2.237f;
+        if (dv < 120.f) {
+            shake = MAX(shake, MIN(1.f, (dv - 6.f) / 35.f));
+        }
+        shake *= expf(-dt / 0.18f);
+        mph = fabsf(gCar_to_view->speedo_speed) * WORLD_SCALE / 1600.f * 3600000.f;
+        s = MAX(0.f, MIN(1.f, (mph - 50.f) / 100.f));
+        wide += (s * s * (3.f - 2.f * s) - wide) * (1.f - expf(-dt / 0.6f));
+    }
+    BrVector3Copy(&last_v, &gCar_to_view->v);
+    if (!pExternal) {
+        return 1.f;
+    }
+    if (shake > 0.01f) {
+        // up to about 1.2 degrees, shaking at around 15-25 Hz
+        t = now / 1000.f;
+        s = shake * harness_game_config.camera_kick * 1.2f;
+        BrMatrix34PreRotateX(&gCamera->t.t.mat, BrDegreeToAngle(s * sinf(t * 113.f)));
+        BrMatrix34PreRotateY(&gCamera->t.t.mat, BrDegreeToAngle(s * 0.7f * sinf(t * 151.f + 1.3f)));
+        BrMatrix34PreRotateZ(&gCamera->t.t.mat, BrDegreeToAngle(s * 0.8f * sinf(t * 97.f + 2.1f)));
+    }
+    return 1.f + 0.08f * harness_game_config.camera_kick * wide;
+}
+#endif
+
 void RenderAFrame(int pDepth_mask_on) {
     int cat;
     int i;
@@ -2276,6 +2329,7 @@ void RenderAFrame(int pDepth_mask_on) {
     float widescreen_factor;
     br_scalar old_aspect;
     br_angle old_fov;
+    float fov_kick = 1.f;
     int fade_to_sky;
     int post_processing;
 #endif
@@ -2379,6 +2433,9 @@ void RenderAFrame(int pDepth_mask_on) {
     }
     gRender_screen->pixels = (char*)gRender_screen->pixels + x_shift + y_shift * gRender_screen->row_bytes;
     CalculateConcussion(the_time);
+#ifdef DETHRACE_3DFX_PATCH
+    fov_kick = KickCamera(!cockpit_on && !gMap_mode);
+#endif
     BrPixelmapRectangleFill(gDepth_buffer, 0, 0, gRender_screen->width, gRender_screen->height, 0xFFFFFFFF);
     if (gRender_indent && !gMap_mode) {
         BrPixelmapRectangleFill(
@@ -2419,10 +2476,10 @@ void RenderAFrame(int pDepth_mask_on) {
     old_aspect = ((br_camera*)gCamera->type_data)->aspect;
     ((br_camera*)gCamera->type_data)->aspect *= widescreen_factor;
     old_fov = ((br_camera*)gCamera->type_data)->field_of_view;
-    if (harness_game_config.fov_scale != 1.f && !cockpit_on && !gMap_mode) {
+    if ((harness_game_config.fov_scale != 1.f || fov_kick != 1.f) && !cockpit_on && !gMap_mode) {
         // Added by dethrace: wider (or narrower) external view. Scales the view's extent, so the
         // horizontal and vertical field of view both change and widescreen stays Hor+
-        ((br_camera*)gCamera->type_data)->field_of_view = BrRadianToAngle(2.f * atanf(tanf(BrAngleToRadian(old_fov) / 2.f) * harness_game_config.fov_scale));
+        ((br_camera*)gCamera->type_data)->field_of_view = BrRadianToAngle(2.f * atanf(tanf(BrAngleToRadian(old_fov) / 2.f) * harness_game_config.fov_scale * fov_kick));
     }
 #endif
 

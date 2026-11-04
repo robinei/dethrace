@@ -131,6 +131,10 @@ FOVScale = 1
 ; and other cars. 0 = rigidly, as the original. 0.08 is quick but smooth
 CameraSmoothing = 0
 
+; Only used in 3dfx mode. The external camera jolts for a moment when the car is hit or hits something, and the
+; view widens a little at speed. The strength, 0 disables
+CameraKick = 0
+
 ; Only used in 3dfx mode. 1 = vsync on, 0 = off, adaptive = vsync, but a frame that is late is shown
 ; immediately (may tear briefly) instead of waiting a whole refresh. Variable refresh rate displays work with 1
 VSync = 1
