@@ -922,6 +922,7 @@ typedef struct br_gl_post_params {
     float weather[3];
     float sun[4];
     float shadow_view[12];
+    float sun_shading;
     int shimmer_count;
     float shimmers[4 * 8];
 } br_gl_post_params;
@@ -930,6 +931,7 @@ void BR_PUBLIC_ENTRY BrGLPostProcessDepthSnapshot(br_pixelmap* screen);
 void BR_PUBLIC_ENTRY BrGLPostProcessSoftParticles(br_pixelmap* screen, float distance);
 br_error BR_PUBLIC_ENTRY BrGLShadowPassBegin(br_pixelmap* screen, int size);
 void BR_PUBLIC_ENTRY BrGLShadowPassEnd(br_pixelmap* screen);
+void BR_PUBLIC_ENTRY BrGLSprites(br_pixelmap* screen, int on);
 // world to the camera of the sun's shadow map, for the post-processing
 static float shadow_view[12];
 static br_pixelmap* gPost_screen;
@@ -979,6 +981,13 @@ void Harness_Hook_ShadowPassEnd(br_pixelmap* screen) {
     BrGLShadowPassEnd(screen);
 }
 
+// what the game draws while on is sprites (flat cards facing the camera), for the sun shadows
+void Harness_Hook_Sprites(int on) {
+    if (gPost_screen != NULL) {
+        BrGLSprites(gPost_screen, on);
+    }
+}
+
 void Harness_Hook_SoftParticles(int on) {
     if (gPost_screen != NULL && harness_game_config.gl_soft_particles > 0.f) {
         // in world units (a car is about 0.5 long)
@@ -1023,6 +1032,7 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
     // the sun of the sun shading, by day, for the shadows
     memcpy(params.sun, scene_surface, sizeof(float) * 3);
     memcpy(params.shadow_view, shadow_view, sizeof(params.shadow_view));
+    params.sun_shading = scene_surface[3];
     params.sun[3] = night ? 0.0f : harness_game_config.gl_sun_shadows;
     // snow on the tracks with ice, rain at night elsewhere
     if (harness_game_config.gl_weather > 0.f && (reflective_texture_count > 0 || night)) {

@@ -475,6 +475,9 @@ void RenderLollipops(void) {
     br_actor** the_actor;
     br_actor* old_parent;
 
+#ifdef DETHRACE_3DFX_PATCH
+    Harness_Hook_Sprites(1);
+#endif
     for (i = 0, the_actor = gLollipops; i < gNumber_of_lollipops; i++, the_actor++) {
         if ((*the_actor)->render_style == BR_RSTYLE_NONE) {
             must_relink = (*the_actor)->parent != gDont_render_actor;
@@ -491,6 +494,9 @@ void RenderLollipops(void) {
             }
         }
     }
+#ifdef DETHRACE_3DFX_PATCH
+    Harness_Hook_Sprites(0);
+#endif
 }
 
 // IDA: void __usercall DRDrawLine(br_pixelmap *pDestn@<EAX>, int pX1@<EDX>, int pY1@<EBX>, int pX2@<ECX>, int pY2, int pColour)

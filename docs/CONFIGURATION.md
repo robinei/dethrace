@@ -96,7 +96,8 @@ SunShading = 0
 
 ; Only used in 3dfx mode. By day everything casts shadows from the sun (the cars, bridges, buildings, cliffs
 ; and posts, whether in view or not), by a shadow map of the world around the car (8192x8192, about 5cm per
-; texel); the cars then have these instead of their original shadows. The strength, 0 disables
+; texel); the cars then have these instead of their original shadows. Whatever is in shadow (the ground under a
+; bridge, the sides turned away from the sun) is equally dark. The strength, 0 disables
 SunShadows = 0
 
 ; Only used in 3dfx mode, with SunShading. The sun picks out the detail of the textures as relief (their

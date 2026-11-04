@@ -6,6 +6,7 @@
 #include "globvars.h"
 #include "globvrbm.h"
 #include "harness/config.h"
+#include "harness/hooks.h"
 #include "harness/trace.h"
 #include "init.h"
 #include "pd/sys.h"
@@ -370,7 +371,13 @@ void DrawColumns(int pDraw_blends, tTrack_spec* pTrack_spec, int pMin_x, int pMa
                     if (pTrack_spec->lollipops[column_z2][column_x2]) {
                         maa.a = pTrack_spec->lollipops[column_z2][column_x2];
                         BrActorEnum(pTrack_spec->lollipops[column_z2][column_x2], LollipopizeChildren, &maa);
+#ifdef DETHRACE_3DFX_PATCH
+                        Harness_Hook_Sprites(1);
+#endif
                         BrZbSceneRenderAdd(pTrack_spec->lollipops[column_z2][column_x2]);
+#ifdef DETHRACE_3DFX_PATCH
+                        Harness_Hook_Sprites(0);
+#endif
                     }
                 }
             }
@@ -403,7 +410,13 @@ void DrawColumns(int pDraw_blends, tTrack_spec* pTrack_spec, int pMin_x, int pMa
                     if (pTrack_spec->lollipops[column_z2][column_x2]) {
                         maa.a = pTrack_spec->lollipops[column_z2][column_x2];
                         BrActorEnum(pTrack_spec->lollipops[column_z2][column_x2], LollipopizeChildren, &maa);
+#ifdef DETHRACE_3DFX_PATCH
+                        Harness_Hook_Sprites(1);
+#endif
                         BrZbSceneRenderAdd(pTrack_spec->lollipops[column_z2][column_x2]);
+#ifdef DETHRACE_3DFX_PATCH
+                        Harness_Hook_Sprites(0);
+#endif
                     }
                 }
             }
