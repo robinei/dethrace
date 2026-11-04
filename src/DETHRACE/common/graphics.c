@@ -2445,7 +2445,16 @@ static int DrawSunShadowMap(void) {
             break;
         }
         BrZbSceneRenderBegin(gUniverse_actor, sun_camera, gRender_screen, gDepth_buffer);
-        BrZbSceneRenderAdd(gUniverse_actor);
+        // what the game draws as the world: the whole track (not just the part in view), the cars and other
+        // things, the additional actors; not all of the universe, which also holds the skies placed around the
+        // cameras (they cast large shadows that moved with the camera)
+        if (gProgram_state.track_spec.the_actor != NULL) {
+            BrZbSceneRenderAdd(gProgram_state.track_spec.the_actor);
+        }
+        BrZbSceneRenderAdd(gNon_track_actor);
+        if (gAdditional_actors != NULL) {
+            BrZbSceneRenderAdd(gAdditional_actors);
+        }
         for (i = 0; i < gNumber_of_lollipops; i++) {
             br_actor* sprite = gLollipops[i];
             br_actor* old_parent;
