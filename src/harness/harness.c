@@ -303,7 +303,6 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_widescreen = 1;
     harness_game_config.gl_widescreen_hud = 1;
     harness_game_config.gl_distance_fog = 1;
-    harness_game_config.gl_distance_fade = 0.8f;
     harness_game_config.gl_depth_of_field = 0;
     harness_game_config.gl_dof_start = 0.4f;
     harness_game_config.gl_dof_end = 1.0f;
@@ -698,8 +697,6 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_glow = (value[0] == '1');
     } else if (MATCH("General", "GlowStrength")) {
         harness_game_config.gl_glow_strength = ClampConfigFloat(atof(value), 0.0f, 4.0f);
-    } else if (MATCH("General", "DistanceFade")) {
-        harness_game_config.gl_distance_fade = ClampConfigFloat(atof(value), 0.0f, 0.99f);
     } else if (MATCH("General", "PhysicsPerFrame")) {
         harness_game_config.physics_per_frame = (value[0] == '1');
     }
@@ -1176,15 +1173,18 @@ void Harness_Hook_SceneSurface(const float* sun, const float* up, int night, con
         scene_surface[9] = haze_colour[1];
         scene_surface[10] = haze_colour[2];
         scene_surface[11] = 0.35f * harness_game_config.gl_haze;
+    } else if (night && harness_game_config.gl_night_haze > 0.f) {
+        // at night the haze replaces the darkness: the same, in the sky's colour by the horizon (black where there
+        // is no sky, as in the mines)
+        scene_surface[8] = haze_colour != NULL ? haze_colour[0] : 0.f;
+        scene_surface[9] = haze_colour != NULL ? haze_colour[1] : 0.f;
+        scene_surface[10] = haze_colour != NULL ? haze_colour[2] : 0.f;
+        scene_surface[11] = harness_game_config.gl_night_haze;
     } else {
         scene_surface[11] = 0.f;
-        // at night: the haze the darkness becomes, in the sky's colour by the horizon (black where there is none)
-        scene_surface[8] = night && haze_colour != NULL ? haze_colour[0] : 0.f;
-        scene_surface[9] = night && haze_colour != NULL ? haze_colour[1] : 0.f;
-        scene_surface[10] = night && haze_colour != NULL ? haze_colour[2] : 0.f;
     }
     scene_surface[12] = haze_distance;
-    scene_surface[14] = night ? harness_game_config.gl_night_haze : 0.f;
+    scene_surface[14] = night && harness_game_config.gl_night_haze > 0.f ? 1.f : 0.f;
     // relief by the sun, so by day with sun shading
     scene_surface[13] = night || harness_game_config.gl_sun_shading <= 0.f ? 0.f : harness_game_config.gl_relief;
 }
@@ -1337,16 +1337,6 @@ int Harness_GL_SceneLighting(float* brightness, const float** lights) {
     *brightness = scene_brightness * scene_shade;
     *lights = scene_lights;
     return scene_light_count;
-}
-
-static int distance_fade_on;
-
-void Harness_Hook_DistanceFade(int on) {
-    distance_fade_on = on;
-}
-
-float Harness_GL_DistanceFade(void) {
-    return distance_fade_on ? harness_game_config.gl_distance_fade : 0.0f;
 }
 
 int Harness_GL_OverlayRegions(const float** regions) {

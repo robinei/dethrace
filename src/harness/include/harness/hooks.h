@@ -143,9 +143,6 @@ void Harness_Hook_HudLayer(int on);
 // `x_offset` to the distance to move the camera by (interface pixels; it maps from the left edge)
 float Harness_Hook_Hud2dBegin(float* x_offset);
 void Harness_Hook_Hud2dEnd(void);
-// Fade geometry out towards the yon distance (DistanceFade), while on. For views without a depth effect,
-// with the sky drawn first so the geometry fades into it
-void Harness_Hook_DistanceFade(int on);
 
 // Post-processing of the 3d view (OpenGL mode, depth of field). Begin returns whether it is in effect;
 // End is then called with the view camera's depth range
@@ -205,7 +202,6 @@ void Harness_Hook_DrawingSky(int sky);
 int Harness_GL_DepthWrite(void);
 float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indices, const short** rects, int* rect_count, int* id);
 float Harness_GL_GlowScale(int id);
-float Harness_GL_DistanceFade(void);
 int Harness_GL_OverlayRegions(const float** regions);
 void Harness_GL_SwapBuffers(br_pixelmap* pm);
 int Harness_Hook_ScaleEmissionCountWithDt(float count, float dt_seconds);

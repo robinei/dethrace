@@ -43,10 +43,6 @@ WidescreenHud = 1
 ; and complete at the (extended) draw distance, so nothing pops in at the far edge. 0 = original approximation
 DistanceFog = 1
 
-; Only used in 3dfx mode. On tracks without fog or darkness, fade the scenery into the sky from this fraction
-; of the draw distance onwards, instead of it popping in at the far edge. 0 disables
-DistanceFade = 0.8
-
 ; Only used in 3dfx mode. Depth of field: the distance blurs, nearer things stay sharp. The blur starts at
 ; DepthOfFieldStart and is strongest at DepthOfFieldEnd (fractions of the draw distance). The strength is the
 ; strongest blur radius in pixels at 1080p (scaled with the window height)
@@ -67,9 +63,9 @@ GlowStrength = 0.7
 ; (more in fog). With Glow on, tail lights glow brighter while a car brakes, day and night
 Night = auto
 NightBrightness = 0.3
-; NightHaze: on the tracks with darkness, the darkness becomes a haze in the sky's colour by the horizon (black
-; in the mines), of this strength, that lights shine through; only the far edge fades out entirely, so more of
-; the night is seen. 0 = the original fade into darkness
+; NightHaze: on the tracks with darkness, the darkness becomes a haze (as Haze by day) in the sky's colour by the
+; horizon (black in the mines), of this strength, that lights shine through, so more of the night is seen. Best
+; with DrawEverything, as nothing then hides the far edge. 0 = the original fade into darkness
 NightHaze = 0.5
 HeadlightStrength = 2
 HeadlightHaze = 1
@@ -201,7 +197,8 @@ GamepadSteeringSpeed = 60
 ; Multiply the draw distance chosen in the game's options. Fog and darkness move out with it
 DrawDistance = 1
 
-; Draw everything, however far (the whole track): no far edge for things to pop in at. The fog, and the ranges of
+; Draw everything, however far (the whole track): no far edge for things to pop in at (on the tracks without
+; fog, and at night with NightHaze, nothing else hides it). The fog, and the ranges of
 ; pedestrians, smoke and shadows, still go by the draw distance (and DrawDistance)
 DrawEverything = 0
 
