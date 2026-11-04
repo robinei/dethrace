@@ -189,6 +189,8 @@ void Harness_Hook_MakeDirectory(const char* path);
 
 // Decides whether this frame is at night (Night = 1, or auto and the view has the darkness depth cue)
 int Harness_Hook_Night(int pDarkness);
+// How much of the weather falls where the car is: 0 under a roof (in a tunnel, a mine), 1 under the open sky
+void Harness_Hook_WeatherOpen(float pOpen);
 
 // glrend callbacks
 int Harness_GL_SceneLighting(float* brightness, const float** lights);

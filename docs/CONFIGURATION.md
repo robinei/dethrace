@@ -138,7 +138,8 @@ IceReflections = 0
 WaterReflections = 0
 
 ; Only used in 3dfx mode, needs a post-processing effect. Snow falls on the tracks with ice, and rain at night on
-; the others. The amount, 0 disables
+; the others. It stops under a roof (tunnels, the mines) once the car has been under it for 2 seconds, and starts
+; again the same way. The amount, 0 disables
 Weather = 0
 
 ; Only used in 3dfx mode. Cars get grimier and scratched as they are damaged (and clean again when repaired).

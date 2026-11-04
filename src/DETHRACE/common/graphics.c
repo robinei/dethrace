@@ -2227,6 +2227,49 @@ static void SetNightLighting(br_actor* pCamera) {
 #endif
 
 #ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: how much of the weather falls, by whether there is a roof over the car (a ray straight up
+// into the track): once that has stayed the same for 2 seconds, the weather fades out (or back in) over one
+static float WeatherOpen(void) {
+    static tU32 last;
+    static tU32 since;
+    static int open = 1;
+    static float amount = 1.f;
+    br_vector3 pos;
+    br_vector3 dir;
+    br_vector3 normal;
+    br_scalar t;
+    br_material* material;
+    tU32 now;
+    int open_now;
+
+    if (gCar_to_view == NULL || gCar_to_view->car_master_actor == NULL) {
+        return amount;
+    }
+    now = PDGetTotalTime();
+    BrVector3Copy(&pos, &gCar_to_view->car_master_actor->t.t.translate.t);
+    pos.v[1] += 0.3f;
+    BrVector3Set(&dir, 0.f, 15.f, 0.f);
+    FindFace(&pos, &dir, &normal, &t, &material);
+    open_now = t >= 1.f;
+    if (last == 0 || now < last || now - last > 1000) {
+        // (a new race, or back from a pause or the menus: as it is now, at once)
+        open = open_now;
+        amount = open ? 1.f : 0.f;
+        since = now;
+    } else if (open_now == open) {
+        since = now;
+    } else if (now - since > 2000) {
+        open = open_now;
+        since = now;
+    }
+    if (last != 0 && now > last) {
+        amount += (open ? 1.f : -1.f) * (now - last) / 1000.f;
+        amount = MAX(0.f, MIN(1.f, amount));
+    }
+    last = now;
+    return amount;
+}
+
 // Added by dethrace: finish the post-processed 3d view, with the speed blur's speed and the fires' heat shimmer
 static void PostProcessView(void) {
     float fires[4 * 8];
@@ -2266,6 +2309,7 @@ static void PostProcessView(void) {
     }
     // the speed blur fades in from 70 to 150 mph
     mph = fabsf(gCar_to_view->speedo_speed) * WORLD_SCALE / 1600.f * 3600000.f;
+    Harness_Hook_WeatherOpen(WeatherOpen());
     // (the draw distance, which the depth of field goes by, not the far plane, which DrawEverything moves out)
     Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, MIN(((br_camera*)gCamera->type_data)->yon_z, gYon_multiplier * gCamera_yon),
         gAction_replay_mode ? 0.f : MAX(0.f, MIN(1.f, (mph - 70.f) / 80.f)), gNight, up, &to_world.m[0][0], fires, fire_count);

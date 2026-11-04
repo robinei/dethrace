@@ -1014,6 +1014,12 @@ void Harness_Hook_SoftParticles(int on) {
     }
 }
 
+static float weather_open = 1.f;
+
+void Harness_Hook_WeatherOpen(float pOpen) {
+    weather_open = pOpen;
+}
+
 void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* up, const float* to_world, const float* fires, int fire_count) {
     br_gl_post_params params;
     int vx, vy;
@@ -1057,9 +1063,9 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
     // (at night, the moon's: fainter)
     params.sun[3] = harness_game_config.gl_sun_shadows * (night ? 0.5f : 1.0f);
     // snow on the tracks with ice, rain at night elsewhere
-    if (harness_game_config.gl_weather > 0.f && (reflective_texture_count > 0 || night)) {
+    if (harness_game_config.gl_weather > 0.f && (reflective_texture_count > 0 || night) && weather_open > 0.f) {
         params.weather[0] = reflective_texture_count > 0 ? 0.f : 1.f;
-        params.weather[1] = harness_game_config.gl_weather;
+        params.weather[1] = harness_game_config.gl_weather * weather_open;
         // (at night the rain catches the city's lights: brighter than the snow)
         params.weather[2] = night ? (reflective_texture_count > 0 ? 0.25f : 0.55f) + 0.5f * harness_game_config.gl_night_brightness : 0.95f;
     }
