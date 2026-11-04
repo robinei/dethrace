@@ -93,6 +93,10 @@ ColourGrading = 0
 ;   (aerial perspective, nothing blurs), 1 = about 30% by the original draw distance, at most 35%; off at night
 SurfaceVariation = 0
 SunShading = 0
+
+; Only used in 3dfx mode, with SunShading. The sun picks out the detail of the textures as relief (their
+; brightness taken as height), by day and close up. The strength, 0 disables
+Relief = 0
 Haze = 0
 
 ; Only used in 3dfx mode. Soft round shadows on the ground under the pedestrians nearby

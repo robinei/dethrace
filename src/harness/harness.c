@@ -346,6 +346,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_soft_particles = 0.f;
     harness_game_config.gl_car_reflections = 0.f;
     harness_game_config.camera_kick = 0.f;
+    harness_game_config.gl_relief = 0.f;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -604,6 +605,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_ice_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "WaterReflections")) {
         harness_game_config.gl_water_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
+    } else if (MATCH("General", "Relief")) {
+        harness_game_config.gl_relief = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "CameraKick")) {
         harness_game_config.camera_kick = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "CarReflections")) {
@@ -1086,6 +1089,8 @@ void Harness_Hook_SceneSurface(const float* sun, const float* up, int night, con
         scene_surface[11] = 0.f;
     }
     scene_surface[12] = haze_distance;
+    // relief by the sun, so by day with sun shading
+    scene_surface[13] = night || harness_game_config.gl_sun_shading <= 0.f ? 0.f : harness_game_config.gl_relief;
 }
 
 static char reflective_textures[32][32];
@@ -1178,7 +1183,7 @@ int Harness_GL_SceneSurface(float* params) {
         return 0;
     }
     memcpy(params, scene_surface, sizeof(scene_surface));
-    return scene_surface[3] > 0.f || scene_surface[7] > 0.f || scene_surface[11] > 0.f;
+    return scene_surface[3] > 0.f || scene_surface[7] > 0.f || scene_surface[11] > 0.f || scene_surface[13] > 0.f;
 }
 
 void Harness_Hook_SceneLighting(float brightness, const float* lights, int count) {
