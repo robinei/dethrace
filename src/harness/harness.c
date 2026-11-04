@@ -343,6 +343,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_wet_roads = 0.f;
     harness_game_config.gl_ice_reflections = 0.f;
     harness_game_config.gl_water_reflections = 0.f;
+    harness_game_config.gl_soft_particles = 0.f;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -601,6 +602,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_ice_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "WaterReflections")) {
         harness_game_config.gl_water_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
+    } else if (MATCH("General", "SoftParticles")) {
+        harness_game_config.gl_soft_particles = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "WetRoads")) {
         harness_game_config.gl_wet_roads = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "SunShading")) {
@@ -902,6 +905,7 @@ typedef struct br_gl_post_params {
 } br_gl_post_params;
 br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen, br_boolean glow);
 void BR_PUBLIC_ENTRY BrGLPostProcessDepthSnapshot(br_pixelmap* screen);
+void BR_PUBLIC_ENTRY BrGLPostProcessSoftParticles(br_pixelmap* screen, float distance);
 static br_pixelmap* gPost_screen;
 void BR_PUBLIC_ENTRY BrGLPostProcessEnd(br_pixelmap* screen, const br_gl_post_params* params);
 
@@ -920,8 +924,15 @@ int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
 }
 
 void Harness_Hook_PostProcessDepthSnapshot(void) {
-    if (gPost_screen != NULL && harness_game_config.gl_ssao) {
+    if (gPost_screen != NULL && (harness_game_config.gl_ssao || harness_game_config.gl_soft_particles > 0.f)) {
         BrGLPostProcessDepthSnapshot(gPost_screen);
+    }
+}
+
+void Harness_Hook_SoftParticles(int on) {
+    if (gPost_screen != NULL && harness_game_config.gl_soft_particles > 0.f) {
+        // in world units (a car is about 0.5 long)
+        BrGLPostProcessSoftParticles(gPost_screen, on ? 0.12f * harness_game_config.gl_soft_particles : 0.f);
     }
 }
 

@@ -2491,9 +2491,16 @@ void RenderAFrame(int pDepth_mask_on) {
         if (!gAusterity_mode) {
             ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 1);
         }
+#ifdef DETHRACE_3DFX_PATCH
+        // Added by dethrace: splashes, smoke and sparks fade out where they cut into the world
+        Harness_Hook_SoftParticles(1);
+#endif
         RenderSplashes();
         RenderSmoke(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
         RenderSparks(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
+#ifdef DETHRACE_3DFX_PATCH
+        Harness_Hook_SoftParticles(0);
+#endif
         RenderProximityRays(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
         BrZbSceneRenderEnd();
 #ifdef DETHRACE_3DFX_PATCH
