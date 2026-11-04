@@ -2032,9 +2032,9 @@ static br_uintptr_t FindLampsCB(br_actor* pActor, void* pArg) {
             BrVector3Sub(&e2, &v[2], &v[0]);
             BrVector3Cross(&n, &e1, &e2);
             area = BrVector3Length(&n) * 0.5f + 1e-6f;
-            // (the faces of one lamp together: within a couple of metres)
+            // (the faces of one lamp together, and long strips of light in a few: within about 4m)
             for (l = 0; l < gLamp_count; l++) {
-                if (Vector3DistanceSquared(&gLamps[l].pos, &centre) < 0.25f * 0.25f) {
+                if (Vector3DistanceSquared(&gLamps[l].pos, &centre) < 0.6f * 0.6f) {
                     break;
                 }
             }
