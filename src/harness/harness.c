@@ -1034,7 +1034,8 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
     memcpy(params.sun, scene_surface, sizeof(float) * 3);
     memcpy(params.shadow_view, shadow_view, sizeof(params.shadow_view));
     params.sun_shading = scene_surface[3];
-    params.sun[3] = night ? 0.0f : harness_game_config.gl_sun_shadows;
+    // (at night, the moon's: fainter)
+    params.sun[3] = harness_game_config.gl_sun_shadows * (night ? 0.5f : 1.0f);
     // snow on the tracks with ice, rain at night elsewhere
     if (harness_game_config.gl_weather > 0.f && (reflective_texture_count > 0 || night)) {
         params.weather[0] = reflective_texture_count > 0 ? 0.f : 1.f;

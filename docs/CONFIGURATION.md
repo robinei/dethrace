@@ -94,11 +94,12 @@ ColourGrading = 0
 SurfaceVariation = 0
 SunShading = 0
 
-; Only used in 3dfx mode. By day everything casts shadows from the sun (the cars, bridges, buildings, cliffs
-; and posts, whether in view or not), by three cascaded shadow maps of the world (8192x8192 each: ~200m around
-; the car at ~2.5cm per texel, ~830m at ~10cm, and the whole track), each taking over where the nearer one ends
-; and its texels are about a screen pixel; the cars then have these instead of their original shadows. Whatever is in shadow (the ground under a
-; bridge, the sides turned away from the sun) is equally dark. The strength, 0 disables
+; Only used in 3dfx mode. Everything casts shadows from the sun (the cars, bridges, buildings, cliffs and posts,
+; whether in view or not), by three cascaded shadow maps of the world (8192x8192 each: ~200m around the car at
+; ~2.5cm per texel, ~830m at ~10cm, and the whole track), each taking over where the nearer one ends and its
+; texels are about a screen pixel. At night they are fainter, as moonlight. The cars have these instead of
+; their original shadows. Whatever is in shadow (the ground under a bridge, the sides turned away from the
+; sun) is equally dark. The strength, 0 disables
 SunShadows = 0
 
 ; Only used in 3dfx mode, with SunShading. The sun picks out the detail of the textures as relief (their

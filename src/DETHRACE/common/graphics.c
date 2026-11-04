@@ -2371,7 +2371,8 @@ static int DrawSunShadowMap(void) {
     float texel, cx, cy, cz;
     int i, level, cx_i, cz_i, drawn;
 
-    if (gNight || gMap_mode || gUniverse_actor == NULL || gCamera == NULL || harness_game_config.gl_sun_shadows <= 0.f) {
+    // (at night too: the moon's, from the same direction, fainter; see Harness_Hook_PostProcessEnd)
+    if (gMap_mode || gUniverse_actor == NULL || gCamera == NULL || harness_game_config.gl_sun_shadows <= 0.f) {
         return 0;
     }
     if (sun_camera == NULL) {
