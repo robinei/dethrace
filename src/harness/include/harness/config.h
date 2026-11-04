@@ -106,6 +106,7 @@ typedef struct tHarness_game_config {
     float gl_sun_shadows; /* screen space shadows cast from the sun, strength; 0 = off */
     float gl_car_wear; /* cars get dirtier and scratched as they are damaged, strength; 0 = off */
     int gl_round_wheels; /* the cars' wheels made round */
+    float gl_sun_highlights; /* broad highlights of the sun on the surfaces, strength; 0 = off */
     float camera_kick; /* external camera jolts on hits and widens at speed, strength; 0 = off */
     float gl_car_reflections; /* strength of the reflections on car paint, 0 = off */
     float gl_soft_particles; /* smoke and sparks fade out near what they cut into, over this many times the base distance; 0 = off */

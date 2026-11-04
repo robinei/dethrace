@@ -346,6 +346,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_soft_particles = 0.f;
     harness_game_config.gl_car_reflections = 0.f;
     harness_game_config.camera_kick = 0.f;
+    harness_game_config.gl_sun_highlights = 0.f;
     harness_game_config.gl_round_wheels = 0;
     harness_game_config.gl_car_wear = 0.f;
     harness_game_config.gl_sun_shadows = 0.f;
@@ -619,6 +620,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_car_wear = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "RoundWheels")) {
         harness_game_config.gl_round_wheels = atoi(value) != 0;
+    } else if (MATCH("General", "SunHighlights")) {
+        harness_game_config.gl_sun_highlights = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "CameraKick")) {
         harness_game_config.camera_kick = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "CarReflections")) {
@@ -926,6 +929,7 @@ typedef struct br_gl_post_params {
     float sun[4];
     float shadow_view[3 * 12];
     float sun_shading;
+    float specular;
     int shimmer_count;
     float shimmers[4 * 8];
 } br_gl_post_params;
@@ -949,7 +953,7 @@ int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
     if (!harness_game_config.opengl_3dfx_mode || screen == NULL
         || !(harness_game_config.gl_depth_of_field || harness_game_config.gl_glow || harness_game_config.gl_ssao
             || harness_game_config.gl_speed_blur || harness_game_config.gl_heat_shimmer || harness_game_config.gl_colour_grading
-            || harness_game_config.gl_sun_shadows > 0.f
+            || harness_game_config.gl_sun_shadows > 0.f || harness_game_config.gl_sun_highlights > 0.f
             || harness_game_config.gl_weather > 0.f
             || ((harness_game_config.gl_wet_roads > 0.f || harness_game_config.gl_ice_reflections > 0.f || harness_game_config.gl_water_reflections > 0.f || harness_game_config.gl_car_reflections > 0.f) && harness_game_config.gl_glow))) {
         return 0;
@@ -1037,6 +1041,8 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
     memcpy(params.sun, scene_surface, sizeof(float) * 3);
     memcpy(params.shadow_view, shadow_view, sizeof(params.shadow_view));
     params.sun_shading = scene_surface[3];
+    // (at night, the moon's: fainter)
+    params.specular = harness_game_config.gl_sun_highlights * (night ? 0.3f : 1.0f);
     // (at night, the moon's: fainter)
     params.sun[3] = harness_game_config.gl_sun_shadows * (night ? 0.5f : 1.0f);
     // snow on the tracks with ice, rain at night elsewhere

@@ -102,6 +102,11 @@ SunShading = 0
 ; sun) is equally dark. The strength, 0 disables
 SunShadows = 0
 
+; Only used in 3dfx mode. The sun catches the surfaces in a broad soft sheen (stronger at grazing angles, on the
+; lighter parts of the textures), which slides over them as the view turns; not in the shadows (with
+; SunShadows). Fainter at night. The strength, 0 disables
+SunHighlights = 0
+
 ; Only used in 3dfx mode, with SunShading. The sun picks out the detail of the textures as relief (their
 ; brightness taken as height), by day and close up. The strength, 0 disables
 Relief = 0
