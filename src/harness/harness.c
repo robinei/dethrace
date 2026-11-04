@@ -1060,7 +1060,8 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
     if (harness_game_config.gl_weather > 0.f && (reflective_texture_count > 0 || night)) {
         params.weather[0] = reflective_texture_count > 0 ? 0.f : 1.f;
         params.weather[1] = harness_game_config.gl_weather;
-        params.weather[2] = night ? 0.25f + 0.5f * harness_game_config.gl_night_brightness : 0.95f;
+        // (at night the rain catches the city's lights: brighter than the snow)
+        params.weather[2] = night ? (reflective_texture_count > 0 ? 0.25f : 0.55f) + 0.5f * harness_game_config.gl_night_brightness : 0.95f;
     }
     params.time = gHarness_platform.GetTicks != NULL ? (gHarness_platform.GetTicks() % 1000000) / 1000.0f : 0.0f;
     if (harness_game_config.gl_heat_shimmer && fires != NULL) {
