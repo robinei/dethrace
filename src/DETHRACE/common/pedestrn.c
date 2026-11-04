@@ -1431,7 +1431,17 @@ void MungePedestrianPath(tPedestrian_data* pPedestrian, float pDanger_level, br_
         pPedestrian->current_speed *= gPedestrian_speed_factor;
         if (!pPedestrian->irreversable
             && pDanger_level != 0.f
-            && BrVector3Dot(&pPedestrian->direction, pDanger_direction) > 0.f) {
+            && BrVector3Dot(&pPedestrian->direction, pDanger_direction) > 0.f
+#ifdef DETHRACE_FIX_BUGS
+            // Added by dethrace: turning away from the danger at most four times a second. Where the path leads
+            // back towards it, the pedestrian turned on every update, flickering between facing one way and the
+            // other as fast as the frame rate (a nervous dither at the original frame rate)
+            && GetTotalTime() - pPedestrian->last_turn_from_danger >= 250
+#endif
+        ) {
+#ifdef DETHRACE_FIX_BUGS
+            pPedestrian->last_turn_from_danger = GetTotalTime();
+#endif
             pPedestrian->instruction_direction = -pPedestrian->instruction_direction;
             gInitial_instruction = NULL;
             if (PedestrianNextInstruction(pPedestrian, pDanger_level, 0, 1) != 0) {
@@ -2863,6 +2873,9 @@ void CreatePedestrian(FILE* pG, tPedestrian_instruction* pInstructions, int pIns
         the_pedestrian->number_of_sequences = GetAnInt(pG);
         the_pedestrian->last_frame = 0;
         the_pedestrian->last_action_change = 0;
+#ifdef DETHRACE_FIX_BUGS
+        the_pedestrian->last_turn_from_danger = 0;
+#endif
         the_pedestrian->sequences = BrMemAllocate(sizeof(tPedestrian_sequence) * the_pedestrian->number_of_sequences, kMem_ped_sequences);
         for (j = 0, the_sequence = the_pedestrian->sequences; j < the_pedestrian->number_of_sequences; j++, the_sequence++) {
             PossibleService();

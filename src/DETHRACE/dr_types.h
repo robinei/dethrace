@@ -2988,6 +2988,9 @@ typedef struct tPedestrian_data {              // size: 0xe4
     tPedestrian_sequence* sequences;           // @0xd8
     tS3_sound_tag last_sound;                  // @0xdc
     br_pixelmap* colour_map;                   // @0xe0
+#ifdef DETHRACE_FIX_BUGS
+    tU32 last_turn_from_danger; // Added by dethrace: see MungePedestrianPath
+#endif
 } tPedestrian_data;
 
 typedef struct tPed_gib {
