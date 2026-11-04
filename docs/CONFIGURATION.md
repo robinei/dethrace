@@ -94,6 +94,11 @@ ColourGrading = 0
 SurfaceVariation = 0
 SunShading = 0
 
+; Only used in 3dfx mode, needs a post-processing effect. By day, what is in view casts shadows from the sun
+; (cars on the road, walls, bridges and posts on the ground), short as the sun is high. The strength, 0
+; disables
+SunShadows = 0
+
 ; Only used in 3dfx mode, with SunShading. The sun picks out the detail of the textures as relief (their
 ; brightness taken as height), by day and close up. The strength, 0 disables
 Relief = 0
