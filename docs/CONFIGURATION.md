@@ -114,6 +114,10 @@ IceReflections = 0
 ; gentle ripple, more at grazing angles. The strength, 0 disables
 WaterReflections = 0
 
+; Only used in 3dfx mode, needs Glow. Car paint gets a glossy coat: it reflects the sky and the scenery around
+; it, mostly at grazing angles. The strength, 0 disables
+CarReflections = 0
+
 ; Only used in 3dfx mode, needs a post-processing effect. Smoke, splashes and sparks fade out where they cut
 ; into the ground, walls and cars, instead of showing a hard line. The softness, 0 disables
 SoftParticles = 0

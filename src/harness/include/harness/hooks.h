@@ -153,6 +153,7 @@ void Harness_Hook_SoftParticles(int on);
 void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* up, const float* to_world, const float* fires, int fire_count);
 // The surfaces with this texture mirror their surroundings (ice) in the OpenGL renderer; NULL forgets them all
 void Harness_Hook_ReflectiveTexture(const char* identifier);
+void Harness_Hook_CarTexture(const char* identifier);
 float Harness_GL_TextureReflect(const char* identifier);
 
 // Night (OpenGL mode): the 3d scenes are darkened and lit by lights (headlights, fires)

@@ -2268,6 +2268,10 @@ void LoadCar(char* pCar_name, tDriver pDriver, tCar_spec* pCar_spec, int pOwner,
     number_of_floorpans = 5;
     for (i = old_material_count; i < pStorage_space->materials_count; i++) {
         if (pStorage_space->materials[i] != NULL && pStorage_space->materials[i]->colour_map != NULL) {
+#ifdef DETHRACE_3DFX_PATCH
+            // Added by dethrace: the car's textures, for its shiny paint
+            Harness_Hook_CarTexture(pStorage_space->materials[i]->colour_map->identifier);
+#endif
             pStorage_space->materials[i]->flags |= (BR_MATF_LIGHT | BR_MATF_PRELIT);
             pStorage_space->materials[i]->flags |= BR_MATF_SMOOTH;
 #ifdef DETHRACE_FIX_BUGS

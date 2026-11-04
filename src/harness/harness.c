@@ -344,6 +344,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_ice_reflections = 0.f;
     harness_game_config.gl_water_reflections = 0.f;
     harness_game_config.gl_soft_particles = 0.f;
+    harness_game_config.gl_car_reflections = 0.f;
     harness_game_config.texture_upscaler = 0;
 
     // first load ini file if exists
@@ -602,6 +603,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_ice_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "WaterReflections")) {
         harness_game_config.gl_water_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
+    } else if (MATCH("General", "CarReflections")) {
+        harness_game_config.gl_car_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "SoftParticles")) {
         harness_game_config.gl_soft_particles = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "WetRoads")) {
@@ -900,6 +903,7 @@ typedef struct br_gl_post_params {
     float ice;
     float water;
     float to_world[12];
+    float paint;
     int shimmer_count;
     float shimmers[4 * 8];
 } br_gl_post_params;
@@ -913,7 +917,7 @@ int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
     if (!harness_game_config.opengl_3dfx_mode || screen == NULL
         || !(harness_game_config.gl_depth_of_field || harness_game_config.gl_glow || harness_game_config.gl_ssao
             || harness_game_config.gl_speed_blur || harness_game_config.gl_heat_shimmer || harness_game_config.gl_colour_grading
-            || ((harness_game_config.gl_wet_roads > 0.f || harness_game_config.gl_ice_reflections > 0.f || harness_game_config.gl_water_reflections > 0.f) && harness_game_config.gl_glow))) {
+            || ((harness_game_config.gl_wet_roads > 0.f || harness_game_config.gl_ice_reflections > 0.f || harness_game_config.gl_water_reflections > 0.f || harness_game_config.gl_car_reflections > 0.f) && harness_game_config.gl_glow))) {
         return 0;
     }
     if (BrGLPostProcessBegin(screen, harness_game_config.gl_glow) != BRE_OK) {
@@ -969,6 +973,7 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
     }
     params.ice = harness_game_config.gl_glow ? harness_game_config.gl_ice_reflections : 0.0f;
     params.water = harness_game_config.gl_glow ? harness_game_config.gl_water_reflections : 0.0f;
+    params.paint = harness_game_config.gl_glow ? harness_game_config.gl_car_reflections : 0.0f;
     params.time = gHarness_platform.GetTicks != NULL ? (gHarness_platform.GetTicks() % 1000000) / 1000.0f : 0.0f;
     if (harness_game_config.gl_heat_shimmer && fires != NULL) {
         params.shimmer_count = fire_count < 8 ? fire_count : 8;
@@ -1093,10 +1098,49 @@ void Harness_Hook_ReflectiveTexture(const char* identifier) {
     }
 }
 
-// 1 for ice (registered by the track), 0.5 for water (and the other liquids), 0 for the rest
+static char car_textures[256][16];
+static int car_texture_count;
+
+void Harness_Hook_CarTexture(const char* identifier) {
+    // not the wheels, the underside, or the windows (which have the sky as their texture)
+    static const char* matte[] = { "WEEL", "WHEEL", "WHL", "TYRE", "TIRE", "UNDER", "DRSKY", "SKY" };
+    char upper[16];
+    int i;
+
+    if (identifier == NULL || strlen(identifier) >= sizeof(upper)) {
+        return;
+    }
+    for (i = 0; identifier[i]; i++) {
+        upper[i] = toupper((unsigned char)identifier[i]);
+    }
+    upper[i] = '\0';
+    for (i = 0; i < (int)(sizeof(matte) / sizeof(matte[0])); i++) {
+        if (strstr(upper, matte[i]) != NULL) {
+            return;
+        }
+    }
+    for (i = 0; i < car_texture_count; i++) {
+        if (strcmp(car_textures[i], upper) == 0) {
+            return;
+        }
+    }
+    if (car_texture_count < 256) {
+        strcpy(car_textures[car_texture_count++], upper);
+    }
+}
+
+// 1 for ice (registered by the track), 0.5 for water (and the other liquids), 0.25 for car paint, 0 for the rest
 float Harness_GL_TextureReflect(const char* identifier) {
     static const char* water[] = { "water2.pix", "water1b.pix", "liquid.pix" };
     int i;
+
+    if (harness_game_config.gl_car_reflections > 0.f) {
+        for (i = 0; i < car_texture_count; i++) {
+            if (strcasecmp(car_textures[i], identifier) == 0) {
+                return 0.25f;
+            }
+        }
+    }
 
     if (harness_game_config.gl_water_reflections > 0.f) {
         for (i = 0; i < (int)(sizeof(water) / sizeof(water[0])); i++) {
