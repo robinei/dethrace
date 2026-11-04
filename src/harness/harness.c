@@ -833,8 +833,7 @@ float Harness_Hook_HudShift(int left, int right) {
 void Harness_Hook_HudRegion(int left, int top, int right, int bottom, float shift) {
     float* r;
 
-    // (regions with no shift stay put, over the places of moved ones: centred messages)
-    if (hud_back_screen == NULL || right <= left || bottom <= top || hud_region_count >= BR_GL_MAX_OVERLAY_REGIONS) {
+    if (hud_back_screen == NULL || shift == 0.0f || right <= left || bottom <= top || hud_region_count >= BR_GL_MAX_OVERLAY_REGIONS) {
         return;
     }
     r = &hud_regions[5 * hud_region_count++];
@@ -843,6 +842,14 @@ void Harness_Hook_HudRegion(int left, int top, int right, int bottom, float shif
     r[2] = (float)right;
     r[3] = (float)bottom;
     r[4] = shift;
+}
+
+void BR_PUBLIC_ENTRY BrGLOverlaySideLayer(br_pixelmap* pm, br_boolean on);
+
+void Harness_Hook_HudLayer(int on) {
+    if (hud_back_screen != NULL) {
+        BrGLOverlaySideLayer(hud_back_screen, on);
+    }
 }
 
 float Harness_Hook_Hud2dBegin(float* x_offset) {
@@ -1083,6 +1090,8 @@ int Harness_GL_OverlayRegions(const float** regions) {
 }
 
 void Harness_GL_SwapBuffers(br_pixelmap* pm) {
+    // (in case a HUD element's drawing was left drawing into the moved layer)
+    Harness_Hook_HudLayer(0);
     gHarness_platform.Swap(pm);
     // the HUD positions are set up again by the next frame
     hud_back_screen = NULL;

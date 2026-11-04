@@ -523,6 +523,8 @@ void DoPratcam(tU32 pThe_time) {
         gProgram_state.current_car.prat_right + offset + (right_image != NULL ? right_image->width : 0),
         gProgram_state.current_car.prat_bottom + y_offset + (gProgram_state.current_car.prat_cam_bottom != NULL ? gProgram_state.current_car.prat_cam_bottom->height : 0),
         hud_shift);
+    // its border into the moved 2d layer
+    Harness_Hook_HudLayer(hud_shift != 0.0f);
 #endif
     old_last_time = gLast_pratcam_frame_time;
 
@@ -652,6 +654,9 @@ void DoPratcam(tU32 pThe_time) {
             the_image->width,
             the_image->height);
     }
+#ifdef DETHRACE_3DFX_PATCH
+    Harness_Hook_HudLayer(0);
+#endif
 }
 
 // IDA: void __usercall TestPratCam(int pIndex@<EAX>)

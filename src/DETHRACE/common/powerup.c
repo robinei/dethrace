@@ -486,7 +486,9 @@ void DrawPowerups(tU32 pTime) {
             int left = MIN(gCurrent_graf_data->power_up_icon_x, gCurrent_graf_data->power_up_icon_countdown_x);
             int right = MAX(gCurrent_graf_data->power_up_icon_x + the_powerup->icon->width, gCurrent_graf_data->power_up_icon_countdown_x + 30);
             int bottom = y + MAX(the_powerup->icon->height, gCurrent_graf_data->power_up_icon_countdown_y_offset + gFonts[kFont_ORANGHED].height);
-            Harness_Hook_HudRegion(left, y, right, bottom, Harness_Hook_HudShift(left, right));
+            float shift = Harness_Hook_HudShift(left, right);
+            Harness_Hook_HudRegion(left, y, right, bottom, shift);
+            Harness_Hook_HudLayer(shift != 0.0f);
         }
 #endif
         if (the_icon->fizzle_stage >= 4) {
@@ -513,6 +515,9 @@ void DrawPowerups(tU32 pTime) {
                 gCurrent_graf_data->power_up_icon_x, y, fizzle_pix, 0,
                 the_icon->fizzle_stage * gFizzle_height, fizzle_pix->width, gFizzle_height);
         }
+#ifdef DETHRACE_3DFX_PATCH
+        Harness_Hook_HudLayer(0);
+#endif
     }
 }
 

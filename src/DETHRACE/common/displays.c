@@ -386,10 +386,20 @@ void DimRectangle(br_pixelmap* pPixelmap, int pLeft, int pTop, int pRight, int p
 
 #ifdef DETHRACE_3DFX_PATCH
 // Added by dethrace: widescreen HUD. The 2d layer pixels of an element in the left or right third of the
-// interface are moved to that edge of the window (does nothing unless the frame's 3d view is extended)
-static void HudRegion(int pLeft, int pTop, int pRight, int pBottom) {
+// interface are moved to that edge of the window (does nothing unless the frame's 3d view is extended). They
+// are drawn into a layer of their own (HudLayer), so messages drawn over their old places stay where they are.
+// Returns whether it moves
+static int HudRegion(int pLeft, int pTop, int pRight, int pBottom) {
+    float shift = Harness_Hook_HudShift(pLeft, pRight);
 
-    Harness_Hook_HudRegion(pLeft, pTop, pRight, pBottom, Harness_Hook_HudShift(pLeft, pRight));
+    Harness_Hook_HudRegion(pLeft, pTop, pRight, pBottom, shift);
+    return shift != 0.0f;
+}
+
+// Around the drawing of the moved elements
+static void HudLayer(int pOn) {
+
+    Harness_Hook_HudLayer(pOn);
 }
 
 static void HudImageRegion(br_pixelmap* pImage, int pX, int pY, int pWidth, int pHeight) {
@@ -399,7 +409,7 @@ static void HudImageRegion(br_pixelmap* pImage, int pX, int pY, int pWidth, int 
     }
 }
 
-static void HudHeadupRegion(tHeadup* pHeadup) {
+static int HudHeadupRegion(tHeadup* pHeadup) {
     int left;
     int top;
     int right;
@@ -424,18 +434,9 @@ static void HudHeadupRegion(tHeadup* pHeadup) {
         right = left + pHeadup->data.image_info.image->width;
         bottom = top + pHeadup->data.image_info.image->height;
         break;
-    case eHeadup_fancy:
-        // slides in and out (by its offset, slanted by up to its shear) and stays put: where it is this frame
-        left = pHeadup->x + MIN(0, pHeadup->data.fancy_info.offset) - abs(pHeadup->data.fancy_info.shear_amount);
-        right = pHeadup->x + MAX(0, pHeadup->data.fancy_info.offset) + pHeadup->data.fancy_info.image->width + abs(pHeadup->data.fancy_info.shear_amount);
-        Harness_Hook_HudRegion(MAX(left, 0), top, MIN(right, gBack_screen->width), top + pHeadup->data.fancy_info.image->height, 0.f);
-        return;
-    case eHeadup_box_text:
-        // centred, stays put
-        Harness_Hook_HudRegion(gBack_screen->width / 10, top, 9 * gBack_screen->width / 10, top + 60, 0.f);
-        return;
     default:
-        return;
+        // fancy (sliding) and boxed headups are centred
+        return 0;
     }
     if (pHeadup->dimmed_background) {
         left = MIN(left, pHeadup->dim_left);
@@ -443,7 +444,7 @@ static void HudHeadupRegion(tHeadup* pHeadup) {
         right = MAX(right, pHeadup->dim_right);
         bottom = MAX(bottom, pHeadup->dim_bottom);
     }
-    HudRegion(left, top, right, bottom);
+    return HudRegion(left, top, right, bottom);
 }
 #endif
 
@@ -497,12 +498,12 @@ void DoPSPowerHeadup(int pY, int pLevel, char* pName, int pBar_colour) {
 #endif
 
 #ifdef DETHRACE_3DFX_PATCH
-    HudRegion(
+    HudLayer(HudRegion(
         MIN(gCurrent_graf_data->ps_dim_left, MIN(gCurrent_graf_data->ps_name_left,
             gCurrent_graf_data->ps_bar_left - gCurrent_graf_data->ps_x_pitch * ((6 - gCurrent_graf_data->ps_bars_per_level) * gCurrent_graf_data->ps_bars_per_level + 1))),
         pY,
         MAX(gCurrent_graf_data->ps_dim_right, gCurrent_graf_data->ps_bar_left + 1),
-        MAX(gCurrent_graf_data->ps_dim_height, gCurrent_graf_data->ps_bar_top_border + gCurrent_graf_data->ps_bar_height + 1) + pY);
+        MAX(gCurrent_graf_data->ps_dim_height, gCurrent_graf_data->ps_bar_top_border + gCurrent_graf_data->ps_bar_height + 1) + pY));
 #endif
     DimRectangle(gBack_screen, gCurrent_graf_data->ps_dim_left, pY, gCurrent_graf_data->ps_dim_right, gCurrent_graf_data->ps_dim_height + pY, 1);
     TransDRPixelmapText(gBack_screen, gCurrent_graf_data->ps_name_left, gCurrent_graf_data->ps_name_top_border + pY, gFonts + 6, pName, gBack_screen->width);
@@ -515,6 +516,9 @@ void DoPSPowerHeadup(int pY, int pLevel, char* pName, int pBar_colour) {
     for (i = pLevel + 1; i >= 0; i--) {
         DubreyBar(i, pY, pBar_colour);
     }
+#ifdef DETHRACE_3DFX_PATCH
+    HudLayer(0);
+#endif
 }
 
 // IDA: void __cdecl DoPSPowerupHeadups()
@@ -562,7 +566,7 @@ void DoHeadups(tU32 pThe_time) {
                 ClearHeadup(i);
             } else {
 #ifdef DETHRACE_3DFX_PATCH
-                HudHeadupRegion(the_headup);
+                HudLayer(HudHeadupRegion(the_headup));
 #endif
                 if (the_headup->dimmed_background) {
                     DimRectangle(
@@ -741,6 +745,9 @@ void DoHeadups(tU32 pThe_time) {
                         DETHRACE_DEFAULT_BREAK;
                     }
                 }
+#ifdef DETHRACE_3DFX_PATCH
+                HudLayer(0);
+#endif
             }
         }
     }
@@ -1156,6 +1163,10 @@ void DoDamageScreen(tU32 pThe_time) {
     } else {
         the_wobble_x = gProgram_state.current_car.damage_x_offset;
         the_wobble_y = gProgram_state.current_car.damage_y_offset;
+#ifdef DETHRACE_3DFX_PATCH
+        // (the region is set below, the layer is chosen now)
+        HudLayer(1);
+#endif
         if (gProgram_state.current_car.damage_background != NULL) {
             DRPixelmapRectangleMaskedCopy(
                 gBack_screen,
@@ -1210,6 +1221,9 @@ void DoDamageScreen(tU32 pThe_time) {
                 y_pitch);
         }
     }
+#ifdef DETHRACE_3DFX_PATCH
+    HudLayer(0);
+#endif
 }
 
 // IDA: void __cdecl PoshDrawLine(float pAngle, br_pixelmap *pDestn, int pX1, int pY1, int pX2, int pY2, int pColour)
@@ -1256,6 +1270,12 @@ void DoInstruments(tU32 pThe_time) {
     if (gProgram_state.current_car_index != gProgram_state.current_car.index) {
         return;
     }
+#ifdef DETHRACE_3DFX_PATCH
+    // (the regions are set at the end, the layer is chosen now)
+    if (!gProgram_state.cockpit_on || gProgram_state.cockpit_image_index < 0) {
+        HudLayer(1);
+    }
+#endif
     speed_mph = gCar_to_view->speedo_speed * WORLD_SCALE / 1600.0 * 3600000.0;
 #ifdef DETHRACE_FIX_BUGS
     // smooth between physics steps
@@ -1523,6 +1543,7 @@ void DoInstruments(tU32 pThe_time) {
             gProgram_state.current_car.gears_image != NULL ? gProgram_state.current_car.gears_image->width : 0,
             gProgram_state.current_car.gears_image != NULL ? gProgram_state.current_car.gears_image->height / 8 : 0);
     }
+    HudLayer(0);
 #endif
 }
 
