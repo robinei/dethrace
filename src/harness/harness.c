@@ -346,6 +346,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_soft_particles = 0.f;
     harness_game_config.gl_car_reflections = 0.f;
     harness_game_config.camera_kick = 0.f;
+    harness_game_config.gl_weather = 0.f;
     harness_game_config.gl_relief = 0.f;
     harness_game_config.texture_upscaler = 0;
 
@@ -607,6 +608,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_water_reflections = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "Relief")) {
         harness_game_config.gl_relief = ClampConfigFloat(atof(value), 0.0f, 4.0f);
+    } else if (MATCH("General", "Weather")) {
+        harness_game_config.gl_weather = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "CameraKick")) {
         harness_game_config.camera_kick = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "CarReflections")) {
@@ -910,6 +913,7 @@ typedef struct br_gl_post_params {
     float water;
     float to_world[12];
     float paint;
+    float weather[3];
     int shimmer_count;
     float shimmers[4 * 8];
 } br_gl_post_params;
@@ -917,12 +921,16 @@ br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen, br_boolean gl
 void BR_PUBLIC_ENTRY BrGLPostProcessDepthSnapshot(br_pixelmap* screen);
 void BR_PUBLIC_ENTRY BrGLPostProcessSoftParticles(br_pixelmap* screen, float distance);
 static br_pixelmap* gPost_screen;
+// the track's ice textures (see Harness_Hook_ReflectiveTexture)
+static char reflective_textures[32][32];
+static int reflective_texture_count;
 void BR_PUBLIC_ENTRY BrGLPostProcessEnd(br_pixelmap* screen, const br_gl_post_params* params);
 
 int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
     if (!harness_game_config.opengl_3dfx_mode || screen == NULL
         || !(harness_game_config.gl_depth_of_field || harness_game_config.gl_glow || harness_game_config.gl_ssao
             || harness_game_config.gl_speed_blur || harness_game_config.gl_heat_shimmer || harness_game_config.gl_colour_grading
+            || harness_game_config.gl_weather > 0.f
             || ((harness_game_config.gl_wet_roads > 0.f || harness_game_config.gl_ice_reflections > 0.f || harness_game_config.gl_water_reflections > 0.f || harness_game_config.gl_car_reflections > 0.f) && harness_game_config.gl_glow))) {
         return 0;
     }
@@ -980,6 +988,12 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
     params.ice = harness_game_config.gl_glow ? harness_game_config.gl_ice_reflections : 0.0f;
     params.water = harness_game_config.gl_glow ? harness_game_config.gl_water_reflections : 0.0f;
     params.paint = harness_game_config.gl_glow ? harness_game_config.gl_car_reflections : 0.0f;
+    // snow on the tracks with ice, rain at night elsewhere
+    if (harness_game_config.gl_weather > 0.f && (reflective_texture_count > 0 || night)) {
+        params.weather[0] = reflective_texture_count > 0 ? 0.f : 1.f;
+        params.weather[1] = harness_game_config.gl_weather;
+        params.weather[2] = night ? 0.25f + 0.5f * harness_game_config.gl_night_brightness : 0.95f;
+    }
     params.time = gHarness_platform.GetTicks != NULL ? (gHarness_platform.GetTicks() % 1000000) / 1000.0f : 0.0f;
     if (harness_game_config.gl_heat_shimmer && fires != NULL) {
         params.shimmer_count = fire_count < 8 ? fire_count : 8;
@@ -1093,8 +1107,6 @@ void Harness_Hook_SceneSurface(const float* sun, const float* up, int night, con
     scene_surface[13] = night || harness_game_config.gl_sun_shading <= 0.f ? 0.f : harness_game_config.gl_relief;
 }
 
-static char reflective_textures[32][32];
-static int reflective_texture_count;
 
 void Harness_Hook_ReflectiveTexture(const char* identifier) {
     if (identifier == NULL) {

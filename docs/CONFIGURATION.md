@@ -118,6 +118,10 @@ IceReflections = 0
 ; gentle ripple, more at grazing angles. The strength, 0 disables
 WaterReflections = 0
 
+; Only used in 3dfx mode, needs a post-processing effect. Snow falls on the tracks with ice, and rain at night on
+; the others. The amount, 0 disables
+Weather = 0
+
 ; Only used in 3dfx mode, needs Glow. Car paint gets a glossy coat: it reflects the sky and the scenery around
 ; it, mostly at grazing angles. The strength, 0 disables
 CarReflections = 0
