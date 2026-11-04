@@ -54,6 +54,7 @@
     X(GetNumVideoDisplays, int, (void))                                                 \
     X(RaiseWindow, void, (SDL_Window*))                                                 \
     X(UpdateTexture, int, (SDL_Texture*, const SDL_Rect*, const void*, int))            \
+    X(SetHint, SDL_bool, (const char*, const char*))                                    \
     X(DestroyTexture, void, (SDL_Texture*))                                             \
     X(DestroyRenderer, void, (SDL_Renderer*))                                           \
     X(GL_MakeCurrent, int, (SDL_Window*, SDL_GLContext))                                \

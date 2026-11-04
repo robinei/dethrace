@@ -484,6 +484,9 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
         window_height = 480;
     }
 
+    // the windows' app id (Wayland) and class: "dethrace" for both the game's and the map's, whatever the
+    // executable is called, so the desktop and compositors' window rules can rely on it
+    SDL2_SetHint("SDL_APP_ID", "dethrace");
     if (SDL2_Init(SDL_INIT_VIDEO) != 0) {
         LOG_PANIC2("SDL_INIT_VIDEO error: %s", SDL2_GetError());
     }
