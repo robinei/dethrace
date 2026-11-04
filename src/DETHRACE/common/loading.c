@@ -1883,6 +1883,239 @@ void SetModelFlags(br_model* pModel, int pOwner) {
 
 // IDA: void __usercall LoadCar(char *pCar_name@<EAX>, tDriver pDriver@<EDX>, tCar_spec *pCar_spec@<EBX>, int pOwner@<ECX>, char *pDriver_name, tBrender_storage *pStorage_space)
 // FUNCTION: CARM95 0x00420144
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: a round version of a wheel model, or NULL where it isn't a plain one. The wheels are low
+// prisms (eg. 8 sided): all their vertices on the rims of their two sides, the texture mapped flat across
+// (along the axle). The round one has the same size and mapping (fitted to the original's), 32 sides, its tread
+// smoothed round and its sides flat, and the faces wound and given materials as the original's are
+#define ROUND_WHEEL_SIDES 32
+static br_model* MakeRoundWheel(br_model* pModel) {
+    br_model* m;
+    float mn[3], mx[3], c[3], d, r, half, x1, x2, err, fit[2][3];
+    double ata[3][3], atb[2][3], det, inv[3][3];
+    int i, j, k, axis, a1, a2, nv, nf, f, tread_sign, cap_sign, have_tread, have_cap;
+    br_material* tread_material;
+    br_material* cap_material;
+    br_vertex* v;
+
+    if (pModel == NULL || pModel->nvertices < 8 || pModel->nvertices > 64 || pModel->vertices == NULL || pModel->faces == NULL) {
+        return NULL;
+    }
+    for (j = 0; j < 3; j++) {
+        mn[j] = mx[j] = pModel->vertices[0].p.v[j];
+    }
+    for (i = 1; i < pModel->nvertices; i++) {
+        for (j = 0; j < 3; j++) {
+            mn[j] = MIN(mn[j], pModel->vertices[i].p.v[j]);
+            mx[j] = MAX(mx[j], pModel->vertices[i].p.v[j]);
+        }
+    }
+    axis = 0;
+    for (j = 1; j < 3; j++) {
+        if (mx[j] - mn[j] < mx[axis] - mn[axis]) {
+            axis = j;
+        }
+    }
+    a1 = (axis + 1) % 3;
+    a2 = (axis + 2) % 3;
+    for (j = 0; j < 3; j++) {
+        c[j] = (mn[j] + mx[j]) / 2.f;
+    }
+    half = (mx[axis] - mn[axis]) / 2.f;
+    r = 0.f;
+    for (i = 0; i < pModel->nvertices; i++) {
+        d = sqrtf((pModel->vertices[i].p.v[a1] - c[a1]) * (pModel->vertices[i].p.v[a1] - c[a1]) + (pModel->vertices[i].p.v[a2] - c[a2]) * (pModel->vertices[i].p.v[a2] - c[a2]));
+        r = MAX(r, d);
+    }
+    if (half <= 0.f || r <= half * 0.5f) {
+        return NULL;
+    }
+    // all on the rims of the two sides
+    for (i = 0; i < pModel->nvertices; i++) {
+        d = sqrtf((pModel->vertices[i].p.v[a1] - c[a1]) * (pModel->vertices[i].p.v[a1] - c[a1]) + (pModel->vertices[i].p.v[a2] - c[a2]) * (pModel->vertices[i].p.v[a2] - c[a2]));
+        if (fabsf(fabsf(pModel->vertices[i].p.v[axis] - c[axis]) - half) > half * 0.05f || d < r * 0.85f) {
+            return NULL;
+        }
+    }
+    // the texture mapping: u and v as affine functions of the position across the axle (least squares)
+    memset(ata, 0, sizeof(ata));
+    memset(atb, 0, sizeof(atb));
+    for (i = 0; i < pModel->nvertices; i++) {
+        double row[3];
+        row[0] = pModel->vertices[i].p.v[a1] - c[a1];
+        row[1] = pModel->vertices[i].p.v[a2] - c[a2];
+        row[2] = 1.0;
+        for (j = 0; j < 3; j++) {
+            for (k = 0; k < 3; k++) {
+                ata[j][k] += row[j] * row[k];
+            }
+            atb[0][j] += row[j] * pModel->vertices[i].map.v[0];
+            atb[1][j] += row[j] * pModel->vertices[i].map.v[1];
+        }
+    }
+    det = ata[0][0] * (ata[1][1] * ata[2][2] - ata[1][2] * ata[2][1]) - ata[0][1] * (ata[1][0] * ata[2][2] - ata[1][2] * ata[2][0])
+        + ata[0][2] * (ata[1][0] * ata[2][1] - ata[1][1] * ata[2][0]);
+    if (fabs(det) < 1e-18) {
+        return NULL;
+    }
+    for (j = 0; j < 3; j++) {
+        for (k = 0; k < 3; k++) {
+            int j1 = (j + 1) % 3, j2 = (j + 2) % 3, k1 = (k + 1) % 3, k2 = (k + 2) % 3;
+            inv[k][j] = (ata[j1][k1] * ata[j2][k2] - ata[j1][k2] * ata[j2][k1]) / det;
+        }
+    }
+    for (i = 0; i < 2; i++) {
+        for (j = 0; j < 3; j++) {
+            fit[i][j] = (float)(inv[j][0] * atb[i][0] + inv[j][1] * atb[i][1] + inv[j][2] * atb[i][2]);
+        }
+    }
+    for (i = 0; i < pModel->nvertices; i++) {
+        x1 = pModel->vertices[i].p.v[a1] - c[a1];
+        x2 = pModel->vertices[i].p.v[a2] - c[a2];
+        err = fabsf(fit[0][0] * x1 + fit[0][1] * x2 + fit[0][2] - pModel->vertices[i].map.v[0])
+            + fabsf(fit[1][0] * x1 + fit[1][1] * x2 + fit[1][2] - pModel->vertices[i].map.v[1]);
+        if (err > 0.03f) {
+            return NULL;
+        }
+    }
+    // the original's winding (by whether its faces' normals point out) and materials, of the tread and the sides
+    have_tread = have_cap = 0;
+    tread_sign = cap_sign = 1;
+    tread_material = cap_material = NULL;
+    for (f = 0; f < pModel->nfaces; f++) {
+        br_vector3 e1, e2, n, centroid, out;
+        br_vector3* p0 = &pModel->vertices[pModel->faces[f].vertices[0]].p;
+        br_vector3* p1 = &pModel->vertices[pModel->faces[f].vertices[1]].p;
+        br_vector3* p2 = &pModel->vertices[pModel->faces[f].vertices[2]].p;
+        BrVector3Sub(&e1, p1, p0);
+        BrVector3Sub(&e2, p2, p0);
+        BrVector3Cross(&n, &e1, &e2);
+        for (j = 0; j < 3; j++) {
+            centroid.v[j] = (p0->v[j] + p1->v[j] + p2->v[j]) / 3.f - c[j];
+        }
+        if (fabsf(n.v[axis]) > 0.7f * BrVector3Length(&n)) {
+            BrVector3Set(&out, 0.f, 0.f, 0.f);
+            out.v[axis] = centroid.v[axis];
+            if (!have_cap) {
+                cap_sign = BrVector3Dot(&n, &out) >= 0.f ? 1 : -1;
+                cap_material = pModel->faces[f].material;
+                have_cap = 1;
+            }
+        } else {
+            out = centroid;
+            out.v[axis] = 0.f;
+            if (!have_tread) {
+                tread_sign = BrVector3Dot(&n, &out) >= 0.f ? 1 : -1;
+                tread_material = pModel->faces[f].material;
+                have_tread = 1;
+            }
+        }
+    }
+    if (!have_tread || !have_cap) {
+        return NULL;
+    }
+
+    nv = 4 * ROUND_WHEEL_SIDES;
+    nf = 2 * ROUND_WHEEL_SIDES + 2 * (ROUND_WHEEL_SIDES - 2);
+    m = BrModelAllocate(pModel->identifier, nv, nf);
+    if (m == NULL) {
+        return NULL;
+    }
+    // vertices: the two sides' rims (for the sides, flat), then again (for the tread, smooth)
+    for (i = 0; i < 4 * ROUND_WHEEL_SIDES; i++) {
+        int side = (i / ROUND_WHEEL_SIDES) % 2;
+        float angle = 2.f * DR_PI * (i % ROUND_WHEEL_SIDES) / ROUND_WHEEL_SIDES;
+        v = &m->vertices[i];
+        v->p.v[axis] = c[axis] + (side ? half : -half);
+        v->p.v[a1] = c[a1] + r * cosf(angle);
+        v->p.v[a2] = c[a2] + r * sinf(angle);
+        x1 = v->p.v[a1] - c[a1];
+        x2 = v->p.v[a2] - c[a2];
+        v->map.v[0] = fit[0][0] * x1 + fit[0][1] * x2 + fit[0][2];
+        v->map.v[1] = fit[1][0] * x1 + fit[1][1] * x2 + fit[1][2];
+    }
+    f = 0;
+    for (i = 0; i < ROUND_WHEEL_SIDES; i++) {
+        int i2 = (i + 1) % ROUND_WHEEL_SIDES;
+        int q[4];
+        q[0] = 2 * ROUND_WHEEL_SIDES + i;
+        q[1] = 2 * ROUND_WHEEL_SIDES + i2;
+        q[2] = 3 * ROUND_WHEEL_SIDES + i2;
+        q[3] = 3 * ROUND_WHEEL_SIDES + i;
+        for (k = 0; k < 2; k++) {
+            m->faces[f].vertices[0] = q[0];
+            m->faces[f].vertices[1] = q[1 + k];
+            m->faces[f].vertices[2] = q[2 + k];
+            m->faces[f].material = tread_material;
+            m->faces[f].smoothing = 1;
+            f++;
+        }
+    }
+    for (k = 0; k < 2; k++) {
+        for (i = 1; i < ROUND_WHEEL_SIDES - 1; i++) {
+            m->faces[f].vertices[0] = k * ROUND_WHEEL_SIDES;
+            m->faces[f].vertices[1] = k * ROUND_WHEEL_SIDES + i;
+            m->faces[f].vertices[2] = k * ROUND_WHEEL_SIDES + i + 1;
+            m->faces[f].material = cap_material;
+            m->faces[f].smoothing = 2 << k;
+            f++;
+        }
+    }
+    // wound as the original's
+    for (f = 0; f < nf; f++) {
+        br_vector3 e1, e2, n, out;
+        br_vector3* p0 = &m->vertices[m->faces[f].vertices[0]].p;
+        br_vector3* p1 = &m->vertices[m->faces[f].vertices[1]].p;
+        br_vector3* p2 = &m->vertices[m->faces[f].vertices[2]].p;
+        int want = m->faces[f].smoothing == 1 ? tread_sign : cap_sign;
+        BrVector3Sub(&e1, p1, p0);
+        BrVector3Sub(&e2, p2, p0);
+        BrVector3Cross(&n, &e1, &e2);
+        for (j = 0; j < 3; j++) {
+            out.v[j] = (p0->v[j] + p1->v[j] + p2->v[j]) / 3.f - c[j];
+        }
+        if (m->faces[f].smoothing == 1) {
+            out.v[axis] = 0.f;
+        } else {
+            out.v[a1] = out.v[a2] = 0.f;
+        }
+        if ((BrVector3Dot(&n, &out) >= 0.f ? 1 : -1) != want) {
+            br_uint_16 t = m->faces[f].vertices[1];
+            m->faces[f].vertices[1] = m->faces[f].vertices[2];
+            m->faces[f].vertices[2] = t;
+        }
+    }
+    m->flags = pModel->flags;
+    BrModelAdd(m);
+    return m;
+}
+
+// the car's wheels made round (where they are plain prisms), sharing a round model where they shared one
+static void RoundCarWheels(tCar_spec* pCar_spec) {
+    br_model* from[COUNT_OF(pCar_spec->wheel_actors)];
+    br_model* to[COUNT_OF(pCar_spec->wheel_actors)];
+    int count = 0;
+    int i, j;
+
+    for (i = 0; i < COUNT_OF(pCar_spec->wheel_actors); i++) {
+        br_actor* wheel = pCar_spec->wheel_actors[i];
+        if (wheel == NULL || wheel->model == NULL) {
+            continue;
+        }
+        for (j = 0; j < count && from[j] != wheel->model; j++) {
+        }
+        if (j == count) {
+            from[count] = wheel->model;
+            to[count] = MakeRoundWheel(wheel->model);
+            count++;
+        }
+        if (to[j] != NULL) {
+            wheel->model = to[j];
+        }
+    }
+}
+#endif
+
 void LoadCar(char* pCar_name, tDriver pDriver, tCar_spec* pCar_spec, int pOwner, char* pDriver_name, tBrender_storage* pStorage_space) {
     FILE* f;
     FILE* g;
@@ -2465,6 +2698,12 @@ void LoadCar(char* pCar_name, tDriver pDriver, tCar_spec* pCar_spec, int pOwner,
     for (i = 0; i < COUNT_OF(gWheel_actor_names); i++) {
         pCar_spec->wheel_actors[i] = DRActorFindRecurse(pCar_spec->car_master_actor, gWheel_actor_names[i]);
     }
+#ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: round wheels (RoundWheels)
+    if (harness_game_config.opengl_3dfx_mode && harness_game_config.gl_round_wheels) {
+        RoundCarWheels(pCar_spec);
+    }
+#endif
     PossibleService();
     ReadMechanicsData(f, pCar_spec);
     PossibleService();

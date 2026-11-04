@@ -134,6 +134,10 @@ Weather = 0
 ; The strength, 0 disables
 CarWear = 0
 
+; Only used in 3dfx mode. The cars' wheels (low prisms in the original, eg. 8 sided) are made round: 32 sided,
+; the same size and texture, the tread shaded smoothly. 0 = the original wheels
+RoundWheels = 0
+
 ; Only used in 3dfx mode, needs Glow. Car paint gets a glossy coat: it reflects the sky and the scenery around
 ; it, mostly at grazing angles. The strength, 0 disables
 CarReflections = 0

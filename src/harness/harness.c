@@ -346,6 +346,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_soft_particles = 0.f;
     harness_game_config.gl_car_reflections = 0.f;
     harness_game_config.camera_kick = 0.f;
+    harness_game_config.gl_round_wheels = 0;
     harness_game_config.gl_car_wear = 0.f;
     harness_game_config.gl_sun_shadows = 0.f;
     harness_game_config.gl_weather = 0.f;
@@ -616,6 +617,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_sun_shadows = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "CarWear")) {
         harness_game_config.gl_car_wear = ClampConfigFloat(atof(value), 0.0f, 2.0f);
+    } else if (MATCH("General", "RoundWheels")) {
+        harness_game_config.gl_round_wheels = atoi(value) != 0;
     } else if (MATCH("General", "CameraKick")) {
         harness_game_config.camera_kick = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "CarReflections")) {
