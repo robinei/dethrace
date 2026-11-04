@@ -2321,7 +2321,6 @@ static float KickCamera(int pExternal) {
 // around (and a little ahead of) the camera, the nearer ones smaller and sharper. The cameras never turn (the
 // sun is fixed) and move in whole shadow texels, so the shadows stand still. Returns whether they were drawn
 #define SUN_SHADOW_LEVELS 3
-#define SUN_SHADOW_MAP_SIZE 8192
 
 // A sprite (lollipop) turned to face the sun (along the ground), keeping its position, size and any mirroring:
 // so its shadow is its whole outline, stretching away from the sun
@@ -2453,7 +2452,7 @@ static int DrawSunShadowMap(void) {
         // moved only in steps of 32 whole texels across the map, and of whole units along the sun, so between
         // the steps its transform stays exactly the same (the least rounding difference shifts what the casters
         // cover of the texels along their edges, which then flickered in and out), and the shadows stand still
-        texel = 32.f * 2.f * radius[level] / SUN_SHADOW_MAP_SIZE;
+        texel = 32.f * 2.f * radius[level] / harness_game_config.gl_shadow_map_size;
         cx = floorf(BrVector3Dot(&centre, &x) / texel + 0.5f) * texel;
         cy = floorf(BrVector3Dot(&centre, &y) / texel + 0.5f) * texel;
         cz = floorf(BrVector3Dot(&centre, &z) + 0.5f) + 100.f;

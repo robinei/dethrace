@@ -95,12 +95,18 @@ SurfaceVariation = 0
 SunShading = 0
 
 ; Only used in 3dfx mode. Everything casts shadows from the sun (the cars, bridges, buildings, cliffs and posts,
-; whether in view or not), by three cascaded shadow maps of the world (8192x8192 each: ~200m around the car at
-; ~2.5cm per texel, ~830m at ~10cm, and the whole track), each taking over where the nearer one ends and its
-; texels are about a screen pixel. At night they are fainter, as moonlight. The cars have these instead of
-; their original shadows. Whatever is in shadow (the ground under a bridge, the sides turned away from the
-; sun) is equally dark. The strength, 0 disables
+; whether in view or not), by three cascaded shadow maps of the world (by default 8192x8192 each, see
+; ShadowMapSize: ~200m around the car at ~2.5cm per texel, ~830m at ~10cm, and the whole track), each taking over
+; where the nearer one ends and its texels are about a screen pixel. At night they are fainter, as moonlight.
+; The cars have these instead of their original shadows. Whatever is in shadow (the ground under a bridge, the
+; sides turned away from the sun) is equally dark. The strength, 0 disables
 SunShadows = 0
+
+; Only used in 3dfx mode, with SunShadows. The size of each of the three shadow maps, in texels (a power of two,
+; 1024 to 16384, at most what the GPU allows). The sharpness of the shadows (and their memory, 4 bytes a texel
+; each) goes with it: 8192 is ~2.5cm per texel close up (768MB in all), 4096 ~5cm, 2048 ~10cm (48MB) for
+; weaker GPUs
+ShadowMapSize = 8192
 
 ; Only used in 3dfx mode. The sun catches the surfaces in a broad soft sheen (stronger at grazing angles, on the
 ; lighter parts of the textures), which slides over them as the view turns; not in the shadows (with

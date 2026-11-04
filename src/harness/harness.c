@@ -347,6 +347,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_car_reflections = 0.f;
     harness_game_config.camera_kick = 0.f;
     harness_game_config.gl_sun_highlights = 0.f;
+    harness_game_config.gl_shadow_map_size = 8192;
     harness_game_config.gl_round_wheels = 0;
     harness_game_config.gl_car_wear = 0.f;
     harness_game_config.gl_sun_shadows = 0.f;
@@ -620,6 +621,13 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_car_wear = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "RoundWheels")) {
         harness_game_config.gl_round_wheels = atoi(value) != 0;
+    } else if (MATCH("General", "ShadowMapSize")) {
+        // a power of two, 1024 to 16384 (and at most what the GPU allows, see BrGLShadowPassBegin)
+        int size = 1024;
+        while (size < 16384 && size < atoi(value)) {
+            size *= 2;
+        }
+        harness_game_config.gl_shadow_map_size = size;
     } else if (MATCH("General", "SunHighlights")) {
         harness_game_config.gl_sun_highlights = ClampConfigFloat(atof(value), 0.0f, 4.0f);
     } else if (MATCH("General", "CameraKick")) {
@@ -978,7 +986,7 @@ int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, int level, const float* wo
         || level < 0 || level >= 3) {
         return 0;
     }
-    if (BrGLShadowPassBegin(screen, 8192, level) != BRE_OK) {
+    if (BrGLShadowPassBegin(screen, harness_game_config.gl_shadow_map_size, level) != BRE_OK) {
         return 0;
     }
     memcpy(shadow_view[level], world_to_light, sizeof(shadow_view[level]));
