@@ -1321,6 +1321,12 @@ void FinishCars(tU32 pLast_frame_time, tU32 pTime) {
                 if (car->oldd[wheel] < car->susp_height[wheel >> 1] && gCurrent_race.material_modifiers[car->material_index[wheel]].smoke_type >= 2 && !car->doing_nothing_flag) {
                     GenerateContinuousSmoke(car, wheel, pTime);
                 }
+#ifdef DETHRACE_3DFX_PATCH
+                // Added by dethrace: spray off the wet road in the rain
+                else if (car->oldd[wheel] < car->susp_height[wheel >> 1] && !car->doing_nothing_flag && Harness_RainSpray() > 0.f) {
+                    GenerateWetSpray(car, wheel, pTime, Harness_RainSpray());
+                }
+#endif
             }
         }
     }

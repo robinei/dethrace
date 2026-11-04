@@ -1457,6 +1457,48 @@ void GenerateContinuousSmoke(tCar_spec* pCar, int wheel, tU32 pTime) {
     CreatePuffOfSmoke(&pos, &v, decay_factor, decay_factor * 2, colour + 8, pCar);
 }
 
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: in the rain, spray thrown up behind the rear wheels on the paved (dustless) surfaces, more
+// the faster the car goes: light grey puffs, quickly gone (the smoke's slots are few)
+void GenerateWetSpray(tCar_spec* pCar, int wheel, tU32 pTime, float pRain) {
+    br_vector3 pos;
+    br_vector3 v;
+    br_vector3 tv;
+    br_scalar speed;
+    br_scalar strength;
+
+    // (the rear wheels: cars face -z)
+    if (pCar->wpos[wheel].v[2] < 0.f) {
+        return;
+    }
+    if (pCar->dust_time[wheel] > pTime) {
+        pCar->dust_time[wheel] -= pTime;
+        return;
+    }
+    pCar->dust_time[wheel] += IRandomBetween(90, 160) - pTime;
+    if (pCar->dust_time[wheel] < 0) {
+        pCar->dust_time[wheel] = 0;
+    }
+    // (m/s: from about 30mph, all of it by 90)
+    speed = BrVector3Length(&pCar->velocity_car_space) * WORLD_SCALE * 1000.0f;
+    strength = pRain * (speed - 13.f) / 27.f;
+    if (strength <= 0.f) {
+        return;
+    }
+    strength = MIN(strength, 1.f) * 0.55f;
+    // just behind the tyre on the ground, thrown up and back, slower than the car (hanging behind it a moment)
+    BrVector3InvScale(&tv, &pCar->wpos[wheel], WORLD_SCALE);
+    tv.v[1] -= pCar->oldd[wheel] / WORLD_SCALE_D;
+    tv.v[2] += 0.03f;
+    BrMatrix34ApplyP(&pos, &tv, &pCar->car_master_actor->t.t.mat);
+    BrVector3Scale(&tv, &pCar->velocity_car_space, WORLD_SCALE * 1000.0f * 0.75f);
+    tv.v[0] += FRandomBetween(-1.5f, 1.5f);
+    tv.v[1] += FRandomBetween(1.5f, 3.f);
+    BrMatrix34ApplyV(&v, &tv, &pCar->car_master_actor->t.t.mat);
+    CreatePuffOfSmoke(&pos, &v, strength, 1.f, 4, pCar);
+}
+#endif
+
 // IDA: void __cdecl DustRotate()
 // FUNCTION: CARM95 0x00468bc5
 void DustRotate(void) {

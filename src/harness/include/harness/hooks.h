@@ -188,6 +188,8 @@ void Harness_Hook_MakeDirectory(const char* path);
 int Harness_Hook_Night(int pDarkness);
 // How much of the weather falls where the car is: 0 under a roof (in a tunnel, a mine), 1 under the open sky
 void Harness_Hook_WeatherOpen(float pOpen);
+// The rain falling where the car is (0 for none, or snow): how much spray the wheels throw up off the wet road
+float Harness_RainSpray(void);
 // Lamps, neon and signs (see Harness_GlowLamp): whether a texture is one, its light palette indices (a bit mask) and
 // intensity. Returns 0 if not (or with no glow, or LampHaze off)
 int Harness_GlowLamp(const char* identifier, const unsigned char** indices, float* intensity);

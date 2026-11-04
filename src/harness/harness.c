@@ -1182,6 +1182,13 @@ void Harness_Hook_MakeDirectory(const char* path) {
 
 static int night_now;
 
+float Harness_RainSpray(void) {
+    if (!harness_game_config.opengl_3dfx_mode || harness_game_config.gl_weather <= 0.f || !night_now || reflective_texture_count > 0) {
+        return 0.f;
+    }
+    return harness_game_config.gl_weather * weather_open;
+}
+
 int Harness_Hook_Night(int pDarkness) {
     night_now = harness_game_config.opengl_3dfx_mode
         && (harness_game_config.gl_night == 1 || (harness_game_config.gl_night == 2 && pDarkness));
