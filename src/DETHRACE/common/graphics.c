@@ -2065,6 +2065,9 @@ static int AddFlashes(float* pLights, int pCount, br_actor* pCamera) {
 
 // Added by dethrace: lights for the 3d view from `pCamera` at night: the cars' headlights (showing as beams in
 // the air, more so in fog) and fires on burning cars. Also brake lights, day and night.
+// Added by dethrace: whether the sun's shadow map was drawn this frame (see DrawSunShadowMap)
+static int gSun_shadow_map_drawn;
+
 static void SetNightLighting(br_actor* pCamera) {
     float lights[SCENE_LIGHT_FLOATS * MAX_SCENE_LIGHTS];
     int count;
@@ -2147,7 +2150,8 @@ static void SetNightLighting(br_actor* pCamera) {
         }
     }
     count = AddFlashes(lights, count, pCamera);
-    if (harness_game_config.gl_pedestrian_shadows) {
+    // (by day with the sun's shadow map, the pedestrians cast their own shadows)
+    if (harness_game_config.gl_pedestrian_shadows && !gSun_shadow_map_drawn) {
         // soft blob shadows under the pedestrians: entries with a negative range, the radius, and the world's up
         // (in the camera's space) for their direction; the shader darkens the ground under them
         br_vector3 feet[MAX_SCENE_LIGHTS];
@@ -2309,14 +2313,50 @@ static float KickCamera(int pExternal) {
 // texels, so the shadows stand still. Returns whether it was drawn
 #define SUN_SHADOW_MAP_SIZE 8192
 #define SUN_SHADOW_RADIUS 30.f
+
+// A sprite (lollipop) turned to face the sun (along the ground), keeping its position, size and any mirroring:
+// so its shadow is its whole outline, stretching away from the sun
+static void TurnSpriteToSun(br_actor* pActor, br_vector3* pSun_flat) {
+    br_matrix34* m = &pActor->t.t.mat;
+    br_vector3 r0, r1, r2, right;
+    float sx, sy, sz, det;
+
+    BrVector3Copy(&r0, (br_vector3*)m->m[0]);
+    BrVector3Copy(&r1, (br_vector3*)m->m[1]);
+    BrVector3Copy(&r2, (br_vector3*)m->m[2]);
+    sx = BrVector3Length(&r0);
+    sy = BrVector3Length(&r1);
+    sz = BrVector3Length(&r2);
+    BrVector3Cross(&right, &r1, &r2);
+    det = BrVector3Dot(&right, &r0);
+    if (det < 0.f) {
+        sx = -sx;
+    }
+    // up stays up; facing the sun; right across
+    m->m[1][0] = 0.f;
+    m->m[1][1] = sy;
+    m->m[1][2] = 0.f;
+    m->m[2][0] = pSun_flat->v[0] * sz;
+    m->m[2][1] = 0.f;
+    m->m[2][2] = pSun_flat->v[2] * sz;
+    m->m[0][0] = pSun_flat->v[2] * sx;
+    m->m[0][1] = 0.f;
+    m->m[0][2] = -pSun_flat->v[0] * sx;
+}
+
+static br_uintptr_t TurnSpriteToSunCB(br_actor* pActor, void* pArg) {
+    TurnSpriteToSun(pActor, pArg);
+    return 0;
+}
+
 static int DrawSunShadowMap(void) {
     static br_actor* sun_camera;
     br_camera* camera;
     br_matrix34 view_to_world;
     br_matrix34 world_to_light;
-    br_vector3 x, y, z, centre, ahead, tv;
+    br_vector3 x, y, z, centre, ahead, tv, sun_flat;
     float texel, cx, cy, cz;
-    int i;
+    int i, cx_i, cz_i;
 
     if (gNight || gMap_mode || gUniverse_actor == NULL || gCamera == NULL) {
         return 0;
@@ -2368,9 +2408,44 @@ static int DrawSunShadowMap(void) {
     if (!Harness_Hook_ShadowPassBegin(gScreen, &world_to_light.m[0][0])) {
         return 0;
     }
+    // the sprites face the sun: the track's (turned back to the camera as they are drawn) and the pedestrians'
+    BrVector3Set(&sun_flat, z.v[0], 0.f, z.v[2]);
+    BrVector3Normalise(&sun_flat, &sun_flat);
+    if (gProgram_state.track_spec.lollipops != NULL) {
+        for (cz_i = 0; cz_i < gProgram_state.track_spec.ncolumns_z; cz_i++) {
+            for (cx_i = 0; cx_i < gProgram_state.track_spec.ncolumns_x; cx_i++) {
+                if (gProgram_state.track_spec.lollipops[cz_i][cx_i] != NULL) {
+                    BrActorEnum(gProgram_state.track_spec.lollipops[cz_i][cx_i], TurnSpriteToSunCB, &sun_flat);
+                }
+            }
+        }
+    }
     BrActorAdd(gUniverse_actor, sun_camera);
     BrZbSceneRenderBegin(gUniverse_actor, sun_camera, gRender_screen, gDepth_buffer);
     BrZbSceneRenderAdd(gUniverse_actor);
+    for (i = 0; i < gNumber_of_lollipops; i++) {
+        br_actor* sprite = gLollipops[i];
+        br_actor* old_parent;
+        br_matrix34 old_mat;
+        if (sprite == NULL || sprite->render_style != BR_RSTYLE_NONE) {
+            continue;
+        }
+        // (as RenderLollipops draws them)
+        old_parent = sprite->parent;
+        if (old_parent != gDont_render_actor) {
+            BrActorRelink(gDont_render_actor, sprite);
+        }
+        old_mat = sprite->t.t.mat;
+        TurnSpriteToSun(sprite, &sun_flat);
+        sprite->render_style = BR_RSTYLE_FACES;
+        SetPedMaterialForRender(sprite);
+        BrZbSceneRenderAdd(sprite);
+        sprite->render_style = BR_RSTYLE_NONE;
+        sprite->t.t.mat = old_mat;
+        if (old_parent != gDont_render_actor) {
+            BrActorRelink(old_parent, sprite);
+        }
+    }
     BrZbSceneRenderEnd();
     BrActorRemove(sun_camera);
     Harness_Hook_ShadowPassEnd(gScreen);
@@ -2565,6 +2640,7 @@ void RenderAFrame(int pDepth_mask_on) {
     gNight = Harness_Hook_Night(gProgram_state.current_depth_effect.type == eDepth_effect_darkness);
     // Added by dethrace: the sun's shadow map
     sun_shadow_map = DrawSunShadowMap();
+    gSun_shadow_map_drawn = sun_shadow_map;
     // Added by dethrace: render the 3d view offscreen for post-processing effects (depth of field)
     post_processing = !gMap_mode && Harness_Hook_PostProcessBegin(gScreen);
     if (!gMap_mode) {
