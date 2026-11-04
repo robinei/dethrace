@@ -2315,12 +2315,12 @@ static float KickCamera(int pExternal) {
 #endif
 
 #ifdef DETHRACE_3DFX_PATCH
-// Added by dethrace: the sun's shadow map (SunShadows). The whole world is drawn again from the sun (the same
-// direction as the sun shading), with a parallel camera covering a square about 60 units (~400m) across,
-// centred a little ahead of the camera. The camera never turns (the sun is fixed) and moves in whole shadow
-// texels, so the shadows stand still. Returns whether it was drawn
+// Added by dethrace: the sun's shadow maps (SunShadows), cascaded. The whole world is drawn again from the sun
+// (the same direction as the sun shading) into three maps, each with a parallel camera covering a square
+// around (and a little ahead of) the camera, the nearer ones smaller and sharper. The cameras never turn (the
+// sun is fixed) and move in whole shadow texels, so the shadows stand still. Returns whether they were drawn
+#define SUN_SHADOW_LEVELS 3
 #define SUN_SHADOW_MAP_SIZE 8192
-#define SUN_SHADOW_RADIUS 30.f
 
 // A sprite (lollipop) turned to face the sun (along the ground), keeping its position, size and any mirroring:
 // so its shadow is its whole outline, stretching away from the sun
@@ -2358,15 +2358,20 @@ static br_uintptr_t TurnSpriteToSunCB(br_actor* pActor, void* pArg) {
 }
 
 static int DrawSunShadowMap(void) {
+    // the levels: their half widths (world units), and how far ahead of the camera they are centred. Each takes
+    // over where the one inside it ends, where its texels are still about a screen pixel at 4K: near (~200m
+    // across, ~2.5cm texels), middle (~830m, ~10cm), and the whole of any track (~2.8km)
+    static const float radius[SUN_SHADOW_LEVELS] = { 15.f, 60.f, 200.f };
+    static const float ahead_by[SUN_SHADOW_LEVELS] = { 5.f, 20.f, 0.f };
     static br_actor* sun_camera;
     br_camera* camera;
     br_matrix34 view_to_world;
     br_matrix34 world_to_light;
     br_vector3 x, y, z, centre, ahead, tv, sun_flat;
     float texel, cx, cy, cz;
-    int i, cx_i, cz_i;
+    int i, level, cx_i, cz_i, drawn;
 
-    if (gNight || gMap_mode || gUniverse_actor == NULL || gCamera == NULL) {
+    if (gNight || gMap_mode || gUniverse_actor == NULL || gCamera == NULL || harness_game_config.gl_sun_shadows <= 0.f) {
         return 0;
     }
     if (sun_camera == NULL) {
@@ -2377,8 +2382,6 @@ static int DrawSunShadowMap(void) {
     }
     camera = sun_camera->type_data;
     camera->type = BR_CAMERA_PARALLEL;
-    camera->width = 2.f * SUN_SHADOW_RADIUS;
-    camera->height = 2.f * SUN_SHADOW_RADIUS;
     camera->aspect = 1.f;
     camera->hither_z = 1.f;
     camera->yon_z = 200.f;
@@ -2390,32 +2393,13 @@ static int DrawSunShadowMap(void) {
     BrVector3Normalise(&x, &x);
     BrVector3Cross(&y, &z, &x);
 
-    // the centre: a third of the way out ahead of the camera, along the ground
     BrActorToActorMatrix34(&view_to_world, gCamera, gUniverse_actor);
     BrVector3Set(&ahead, -view_to_world.m[2][0], 0.f, -view_to_world.m[2][2]);
     if (BrVector3LengthSquared(&ahead) < 1e-6f) {
         BrVector3Set(&ahead, 0.f, 0.f, -1.f);
     }
     BrVector3Normalise(&ahead, &ahead);
-    BrVector3Scale(&tv, &ahead, SUN_SHADOW_RADIUS * 0.33f);
-    BrVector3Add(&centre, (br_vector3*)view_to_world.m[3], &tv);
-    // in whole texels across the map
-    texel = 2.f * SUN_SHADOW_RADIUS / SUN_SHADOW_MAP_SIZE;
-    cx = floorf(BrVector3Dot(&centre, &x) / texel + 0.5f) * texel;
-    cy = floorf(BrVector3Dot(&centre, &y) / texel + 0.5f) * texel;
-    cz = BrVector3Dot(&centre, &z) + 100.f;
 
-    sun_camera->t.type = BR_TRANSFORM_MATRIX34;
-    for (i = 0; i < 3; i++) {
-        sun_camera->t.t.mat.m[0][i] = x.v[i];
-        sun_camera->t.t.mat.m[1][i] = y.v[i];
-        sun_camera->t.t.mat.m[2][i] = z.v[i];
-        sun_camera->t.t.mat.m[3][i] = x.v[i] * cx + y.v[i] * cy + z.v[i] * cz;
-    }
-    BrMatrix34Inverse(&world_to_light, &sun_camera->t.t.mat);
-    if (!Harness_Hook_ShadowPassBegin(gScreen, &world_to_light.m[0][0])) {
-        return 0;
-    }
     // the sprites face the sun: the track's (turned back to the camera as they are drawn) and the pedestrians'
     BrVector3Set(&sun_flat, z.v[0], 0.f, z.v[2]);
     BrVector3Normalise(&sun_flat, &sun_flat);
@@ -2428,36 +2412,66 @@ static int DrawSunShadowMap(void) {
             }
         }
     }
-    BrActorAdd(gUniverse_actor, sun_camera);
-    BrZbSceneRenderBegin(gUniverse_actor, sun_camera, gRender_screen, gDepth_buffer);
-    BrZbSceneRenderAdd(gUniverse_actor);
-    for (i = 0; i < gNumber_of_lollipops; i++) {
-        br_actor* sprite = gLollipops[i];
-        br_actor* old_parent;
-        br_matrix34 old_mat;
-        if (sprite == NULL || sprite->render_style != BR_RSTYLE_NONE) {
-            continue;
-        }
-        // (as RenderLollipops draws them)
-        old_parent = sprite->parent;
-        if (old_parent != gDont_render_actor) {
-            BrActorRelink(gDont_render_actor, sprite);
-        }
-        old_mat = sprite->t.t.mat;
-        TurnSpriteToSun(sprite, &sun_flat);
-        sprite->render_style = BR_RSTYLE_FACES;
-        SetPedMaterialForRender(sprite);
-        BrZbSceneRenderAdd(sprite);
-        sprite->render_style = BR_RSTYLE_NONE;
-        sprite->t.t.mat = old_mat;
-        if (old_parent != gDont_render_actor) {
-            BrActorRelink(old_parent, sprite);
-        }
+
+    // (the cars' original shadow is left out while the shadow maps are drawn, see RenderAFrame; it is hidden
+    // outside RenderShadows, but only once that has run)
+    if (gShadow_actor != NULL) {
+        gShadow_actor->render_style = BR_RSTYLE_NONE;
     }
-    BrZbSceneRenderEnd();
+    drawn = 0;
+    BrActorAdd(gUniverse_actor, sun_camera);
+    for (level = 0; level < SUN_SHADOW_LEVELS; level++) {
+        camera->width = 2.f * radius[level];
+        camera->height = 2.f * radius[level];
+        BrVector3Scale(&tv, &ahead, ahead_by[level]);
+        BrVector3Add(&centre, (br_vector3*)view_to_world.m[3], &tv);
+        // in whole texels across the map, so the shadows stand still
+        texel = 2.f * radius[level] / SUN_SHADOW_MAP_SIZE;
+        cx = floorf(BrVector3Dot(&centre, &x) / texel + 0.5f) * texel;
+        cy = floorf(BrVector3Dot(&centre, &y) / texel + 0.5f) * texel;
+        cz = BrVector3Dot(&centre, &z) + 100.f;
+        sun_camera->t.type = BR_TRANSFORM_MATRIX34;
+        for (i = 0; i < 3; i++) {
+            sun_camera->t.t.mat.m[0][i] = x.v[i];
+            sun_camera->t.t.mat.m[1][i] = y.v[i];
+            sun_camera->t.t.mat.m[2][i] = z.v[i];
+            sun_camera->t.t.mat.m[3][i] = x.v[i] * cx + y.v[i] * cy + z.v[i] * cz;
+        }
+        BrMatrix34Inverse(&world_to_light, &sun_camera->t.t.mat);
+        if (!Harness_Hook_ShadowPassBegin(gScreen, level, &world_to_light.m[0][0])) {
+            break;
+        }
+        BrZbSceneRenderBegin(gUniverse_actor, sun_camera, gRender_screen, gDepth_buffer);
+        BrZbSceneRenderAdd(gUniverse_actor);
+        for (i = 0; i < gNumber_of_lollipops; i++) {
+            br_actor* sprite = gLollipops[i];
+            br_actor* old_parent;
+            br_matrix34 old_mat;
+            if (sprite == NULL || sprite->render_style != BR_RSTYLE_NONE) {
+                continue;
+            }
+            // (as RenderLollipops draws them)
+            old_parent = sprite->parent;
+            if (old_parent != gDont_render_actor) {
+                BrActorRelink(gDont_render_actor, sprite);
+            }
+            old_mat = sprite->t.t.mat;
+            TurnSpriteToSun(sprite, &sun_flat);
+            sprite->render_style = BR_RSTYLE_FACES;
+            SetPedMaterialForRender(sprite);
+            BrZbSceneRenderAdd(sprite);
+            sprite->render_style = BR_RSTYLE_NONE;
+            sprite->t.t.mat = old_mat;
+            if (old_parent != gDont_render_actor) {
+                BrActorRelink(old_parent, sprite);
+            }
+        }
+        BrZbSceneRenderEnd();
+        Harness_Hook_ShadowPassEnd(gScreen);
+        drawn = 1;
+    }
     BrActorRemove(sun_camera);
-    Harness_Hook_ShadowPassEnd(gScreen);
-    return 1;
+    return drawn;
 }
 #endif
 

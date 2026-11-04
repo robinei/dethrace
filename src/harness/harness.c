@@ -921,7 +921,7 @@ typedef struct br_gl_post_params {
     float paint;
     float weather[3];
     float sun[4];
-    float shadow_view[12];
+    float shadow_view[3 * 12];
     float sun_shading;
     int shimmer_count;
     float shimmers[4 * 8];
@@ -929,11 +929,11 @@ typedef struct br_gl_post_params {
 br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen, br_boolean glow);
 void BR_PUBLIC_ENTRY BrGLPostProcessDepthSnapshot(br_pixelmap* screen);
 void BR_PUBLIC_ENTRY BrGLPostProcessSoftParticles(br_pixelmap* screen, float distance);
-br_error BR_PUBLIC_ENTRY BrGLShadowPassBegin(br_pixelmap* screen, int size);
+br_error BR_PUBLIC_ENTRY BrGLShadowPassBegin(br_pixelmap* screen, int size, int level);
 void BR_PUBLIC_ENTRY BrGLShadowPassEnd(br_pixelmap* screen);
 void BR_PUBLIC_ENTRY BrGLSprites(br_pixelmap* screen, int on);
-// world to the camera of the sun's shadow map, for the post-processing
-static float shadow_view[12];
+// world to the cameras of the sun's shadow maps (levels), for the post-processing
+static float shadow_view[3][12];
 static br_pixelmap* gPost_screen;
 // the sun, surface up, haze and relief of the scene (see Harness_Hook_SceneSurface)
 static float scene_surface[16];
@@ -966,14 +966,15 @@ void Harness_Hook_PostProcessDepthSnapshot(void) {
 
 // The sun's shadow map: whether to draw it (by day, with SunShadows), the scene drawn in between with the sun's
 // camera; pWorld_to_light: world to that camera
-int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, const float* world_to_light) {
-    if (!harness_game_config.opengl_3dfx_mode || harness_game_config.gl_sun_shadows <= 0.f || screen == NULL) {
+int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, int level, const float* world_to_light) {
+    if (!harness_game_config.opengl_3dfx_mode || harness_game_config.gl_sun_shadows <= 0.f || screen == NULL
+        || level < 0 || level >= 3) {
         return 0;
     }
-    if (BrGLShadowPassBegin(screen, 8192) != BRE_OK) {
+    if (BrGLShadowPassBegin(screen, 8192, level) != BRE_OK) {
         return 0;
     }
-    memcpy(shadow_view, world_to_light, sizeof(shadow_view));
+    memcpy(shadow_view[level], world_to_light, sizeof(shadow_view[level]));
     return 1;
 }
 
