@@ -2426,11 +2426,13 @@ static int DrawSunShadowMap(void) {
         camera->height = 2.f * radius[level];
         BrVector3Scale(&tv, &ahead, ahead_by[level]);
         BrVector3Add(&centre, (br_vector3*)view_to_world.m[3], &tv);
-        // in whole texels across the map, so the shadows stand still
-        texel = 2.f * radius[level] / SUN_SHADOW_MAP_SIZE;
+        // moved only in steps of 32 whole texels across the map, and of whole units along the sun, so between
+        // the steps its transform stays exactly the same (the least rounding difference shifts what the casters
+        // cover of the texels along their edges, which then flickered in and out), and the shadows stand still
+        texel = 32.f * 2.f * radius[level] / SUN_SHADOW_MAP_SIZE;
         cx = floorf(BrVector3Dot(&centre, &x) / texel + 0.5f) * texel;
         cy = floorf(BrVector3Dot(&centre, &y) / texel + 0.5f) * texel;
-        cz = BrVector3Dot(&centre, &z) + 100.f;
+        cz = floorf(BrVector3Dot(&centre, &z) + 0.5f) + 100.f;
         sun_camera->t.type = BR_TRANSFORM_MATRIX34;
         for (i = 0; i < 3; i++) {
             sun_camera->t.t.mat.m[0][i] = x.v[i];
