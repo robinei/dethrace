@@ -44,8 +44,10 @@ WidescreenHud = 1
 DistanceFog = 1
 
 ; Only used in 3dfx mode. Depth of field: the distance blurs, nearer things stay sharp. The blur starts at
-; DepthOfFieldStart and is strongest at DepthOfFieldEnd (fractions of the draw distance). The strength is the
-; strongest blur radius in pixels at 1080p (scaled with the window height)
+; DepthOfFieldStart and is strongest at DepthOfFieldEnd (fractions of the draw distance, up to 8: with
+; DrawEverything only the far distance beyond it can blur). The strength is the strongest blur radius in pixels at
+; 1080p (scaled with the window height). It blurs the scene as lit (shadows, reflections and the weather too), and
+; costs only where something is blurred: the far scenery, and the sky (cheaply)
 DepthOfField = 0
 DepthOfFieldStart = 0.4
 DepthOfFieldEnd = 1

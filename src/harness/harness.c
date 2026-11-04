@@ -663,9 +663,9 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
     } else if (MATCH("General", "DepthOfField")) {
         harness_game_config.gl_depth_of_field = (value[0] == '1');
     } else if (MATCH("General", "DepthOfFieldStart")) {
-        harness_game_config.gl_dof_start = ClampConfigFloat(atof(value), 0.0f, 1.0f);
+        harness_game_config.gl_dof_start = ClampConfigFloat(atof(value), 0.0f, 8.0f);
     } else if (MATCH("General", "DepthOfFieldEnd")) {
-        harness_game_config.gl_dof_end = ClampConfigFloat(atof(value), 0.01f, 1.0f);
+        harness_game_config.gl_dof_end = ClampConfigFloat(atof(value), 0.01f, 8.0f);
     } else if (MATCH("General", "DepthOfFieldStrength")) {
         harness_game_config.gl_dof_strength = ClampConfigFloat(atof(value), 0.0f, 20.0f);
     } else if (MATCH("General", "Night")) {
