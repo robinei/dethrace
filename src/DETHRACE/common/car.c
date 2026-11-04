@@ -5602,12 +5602,15 @@ void RestoreCameraPosition(int i) {
 #ifdef DETHRACE_FIX_BUGS
 // Added by dethrace: the external camera is placed and aimed exactly where the original logic wants it, so
 // every bump, knock and spin of the car jerks the view. With CameraSmoothing, the camera moves towards that
-// position, and its aim towards the car, with that time constant; only avoiding walls and other cars (after
-// this) still sets it directly, and it eases back out from there
+// position, and its aim towards the car, with that time constant. Avoiding walls and other cars (after this)
+// moves it on from there, but isn't fed back into the easing (which then fought it, the camera jumping back and
+// forth): the move is applied on top, at once when it has to move further in, and let go of gradually
 static br_vector3 gEased_camera_pos;
 static br_vector3 gEased_camera_look;
 static int gEased_camera_valid;
 static tU32 gEased_camera_time;
+static br_vector3 gEased_camera_push; // how far avoiding walls and cars moves the camera, smoothed
+static int gEased_camera_push_valid;
 
 // pTarget: the wanted camera position, becomes the eased one; pLook: the eased point to aim at
 static int EaseCamera(br_vector3* pTarget, br_vector3* pCar_pos, br_vector3* pLook, br_scalar pDistance, tU32 pTime, int pSnap) {
@@ -5626,6 +5629,7 @@ static int EaseCamera(br_vector3* pTarget, br_vector3* pCar_pos, br_vector3* pLo
         // (a reset, a recovery, back from the cockpit view or a pause)
         BrVector3Copy(&gEased_camera_pos, pTarget);
         BrVector3Copy(&gEased_camera_look, pCar_pos);
+        gEased_camera_push_valid = 0;
     } else {
         k = 1.f - expf(-(float)pTime / 1000.f / tau);
         BrVector3Scale(&tv, &tv, k);
@@ -5641,9 +5645,26 @@ static int EaseCamera(br_vector3* pTarget, br_vector3* pCar_pos, br_vector3* pLo
     return 1;
 }
 
-// where the camera ended up (moved off walls and cars), to ease on from
-static void EasedCameraPlaced(br_vector3* pPos) {
-    BrVector3Copy(&gEased_camera_pos, pPos);
+// pPos: where avoiding walls and cars put the eased camera (at pEased); becomes the smoothed placement. Moving
+// further in (or a new direction) is taken at once, so it doesn't go through the wall; less is let go of with
+// a time constant of a quarter of a second
+static void EasedCameraPlaced(br_vector3* pPos, br_vector3* pEased, tU32 pTime) {
+    br_vector3 push;
+    br_vector3 tv;
+    float k;
+
+    BrVector3Sub(&push, pPos, pEased);
+    if (!gEased_camera_push_valid
+        || BrVector3LengthSquared(&push) >= BrVector3LengthSquared(&gEased_camera_push) * 0.98f) {
+        BrVector3Copy(&gEased_camera_push, &push);
+    } else {
+        k = 1.f - expf(-(float)pTime / 1000.f / 0.25f);
+        BrVector3Sub(&tv, &push, &gEased_camera_push);
+        BrVector3Scale(&tv, &tv, k);
+        BrVector3Accumulate(&gEased_camera_push, &tv);
+    }
+    gEased_camera_push_valid = 1;
+    BrVector3Add(pPos, pEased, &gEased_camera_push);
 }
 
 // PointCameraAtCar, at a point
@@ -5705,6 +5726,7 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
 #ifdef DETHRACE_FIX_BUGS
     int eased;
     br_vector3 eased_look;
+    br_vector3 eased_pos;
 #endif
 
     m2 = &gCamera->t.t.mat;
@@ -5795,6 +5817,7 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
         BrVector3Copy(&gCamera_pos_before_collide, (br_vector3*)m2->m[3]);
 #ifdef DETHRACE_FIX_BUGS
         eased = EaseCamera((br_vector3*)m2->m[3], &c->pos, &eased_look, dist, pTime, swoop || gCamera_reset);
+        BrVector3Copy(&eased_pos, (br_vector3*)m2->m[3]);
 #endif
         CollideCameraWithOtherCars(&c->pos, (br_vector3*)m2->m[3]);
         CollideCamera2(&c->pos, (br_vector3*)m2->m[3], &old_camera_pos, manual_swing || manual_zoom);
@@ -5803,7 +5826,7 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
         }
 #ifdef DETHRACE_FIX_BUGS
         if (eased) {
-            EasedCameraPlaced((br_vector3*)m2->m[3]);
+            EasedCameraPlaced((br_vector3*)m2->m[3], &eased_pos, pTime);
             PointCameraAtPoint(m2, &eased_look);
         } else
 #endif
