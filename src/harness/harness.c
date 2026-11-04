@@ -346,6 +346,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.gl_soft_particles = 0.f;
     harness_game_config.gl_car_reflections = 0.f;
     harness_game_config.camera_kick = 0.f;
+    harness_game_config.gl_car_wear = 0.f;
     harness_game_config.gl_sun_shadows = 0.f;
     harness_game_config.gl_weather = 0.f;
     harness_game_config.gl_relief = 0.f;
@@ -613,6 +614,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.gl_weather = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "SunShadows")) {
         harness_game_config.gl_sun_shadows = ClampConfigFloat(atof(value), 0.0f, 2.0f);
+    } else if (MATCH("General", "CarWear")) {
+        harness_game_config.gl_car_wear = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "CameraKick")) {
         harness_game_config.camera_kick = ClampConfigFloat(atof(value), 0.0f, 2.0f);
     } else if (MATCH("General", "CarReflections")) {
@@ -1128,13 +1131,19 @@ void Harness_Hook_ReflectiveTexture(const char* identifier) {
 }
 
 static char car_textures[256][16];
+static int car_texture_slot[256];
 static int car_texture_count;
+// the cars the textures belong to (their slots), and how worn they look
+static const void* wear_cars[64];
+static float wear_amounts[64];
+static int wear_car_count;
 
-void Harness_Hook_CarTexture(const char* identifier) {
+void Harness_Hook_CarTexture(const char* identifier, const void* car) {
     // not the wheels, the underside, or the windows (which have the sky as their texture)
     static const char* matte[] = { "WEEL", "WHEEL", "WHL", "TYRE", "TIRE", "UNDER", "DRSKY", "SKY" };
     char upper[16];
     int i;
+    int slot;
 
     if (identifier == NULL || strlen(identifier) >= sizeof(upper)) {
         return;
@@ -1148,14 +1157,50 @@ void Harness_Hook_CarTexture(const char* identifier) {
             return;
         }
     }
+    for (slot = 0; slot < wear_car_count && wear_cars[slot] != car; slot++) {
+    }
+    if (slot == wear_car_count && wear_car_count < 64) {
+        wear_cars[wear_car_count++] = car;
+    }
+    if (slot >= 64) {
+        slot = -1;
+    }
     for (i = 0; i < car_texture_count; i++) {
         if (strcmp(car_textures[i], upper) == 0) {
+            // (loaded again, perhaps for another car)
+            car_texture_slot[i] = slot;
             return;
         }
     }
     if (car_texture_count < 256) {
+        car_texture_slot[car_texture_count] = slot;
         strcpy(car_textures[car_texture_count++], upper);
     }
+}
+
+void Harness_Hook_CarWear(const void* car, float wear) {
+    int slot;
+
+    for (slot = 0; slot < wear_car_count; slot++) {
+        if (wear_cars[slot] == car) {
+            wear_amounts[slot] = wear * harness_game_config.gl_car_wear;
+        }
+    }
+}
+
+int Harness_GL_TextureSlot(const char* identifier) {
+    int i;
+
+    for (i = 0; i < car_texture_count; i++) {
+        if (strcasecmp(car_textures[i], identifier) == 0) {
+            return car_texture_slot[i];
+        }
+    }
+    return -1;
+}
+
+float Harness_GL_SlotWear(int slot) {
+    return slot >= 0 && slot < wear_car_count ? wear_amounts[slot] : 0.f;
 }
 
 // 1 for ice (registered by the track), 0.5 for water (and the other liquids), 0.25 for car paint (-0.25 for

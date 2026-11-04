@@ -2532,6 +2532,29 @@ void RenderAFrame(int pDepth_mask_on) {
             Harness_Hook_DistanceFade(1);
         }
 #endif
+#ifdef DETHRACE_3DFX_PATCH
+        // Added by dethrace: how worn each car looks (dirt and scratches), by its damage
+        if (harness_game_config.gl_car_wear > 0.f) {
+            int cat, n, k, units;
+            float sum;
+            tCar_spec* c;
+            for (cat = eVehicle_self; cat <= eVehicle_rozzer; cat++) {
+                for (n = 0; n < GetCarCount(cat); n++) {
+                    c = GetCarSpec(cat, n);
+                    if (c == NULL) {
+                        continue;
+                    }
+                    sum = 0.f;
+                    units = 0;
+                    for (k = 0; k < COUNT_OF(c->damage_units); k++) {
+                        sum += c->damage_units[k].damage_level;
+                        units++;
+                    }
+                    Harness_Hook_CarWear(c, units > 0 ? MIN(1.f, sum / units / 60.f) : 0.f);
+                }
+            }
+        }
+#endif
         ProcessNonTrackActors(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, &old_camera_matrix);
         ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 0);
 #ifdef DETHRACE_3DFX_PATCH

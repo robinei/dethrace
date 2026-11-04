@@ -104,6 +104,7 @@ typedef struct tHarness_game_config {
     float gl_relief; /* the sun picks out the textures' detail as relief (with sun shading), strength; 0 = off */
     float gl_weather; /* snow on the icy tracks, rain at night elsewhere: the amount; 0 = off */
     float gl_sun_shadows; /* screen space shadows cast from the sun, strength; 0 = off */
+    float gl_car_wear; /* cars get dirtier and scratched as they are damaged, strength; 0 = off */
     float camera_kick; /* external camera jolts on hits and widens at speed, strength; 0 = off */
     float gl_car_reflections; /* strength of the reflections on car paint, 0 = off */
     float gl_soft_particles; /* smoke and sparks fade out near what they cut into, over this many times the base distance; 0 = off */

@@ -127,6 +127,10 @@ WaterReflections = 0
 ; the others. The amount, 0 disables
 Weather = 0
 
+; Only used in 3dfx mode. Cars get grimier and scratched as they are damaged (and clean again when repaired).
+; The strength, 0 disables
+CarWear = 0
+
 ; Only used in 3dfx mode, needs Glow. Car paint gets a glossy coat: it reflects the sky and the scenery around
 ; it, mostly at grazing angles. The strength, 0 disables
 CarReflections = 0
