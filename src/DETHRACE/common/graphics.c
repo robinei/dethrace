@@ -2372,6 +2372,7 @@ static int DrawSunShadowMap(void) {
     float texel, cx, cy, cz;
     int i, level, cx_i, cz_i, drawn;
     br_uint_8 decal_style[SKID_COUNT + COUNT_OF(gOily_spills)];
+    br_uint_8 flame_style[MAX_SMOKE_COLUMNS];
 
     // (at night too: the moon's, from the same direction, fainter; see Harness_Hook_PostProcessEnd)
     if (gMap_mode || gUniverse_actor == NULL || gCamera == NULL || harness_game_config.gl_sun_shadows <= 0.f) {
@@ -2420,6 +2421,13 @@ static int DrawSunShadowMap(void) {
     // outside RenderShadows, but only once that has run)
     if (gShadow_actor != NULL) {
         gShadow_actor->render_style = BR_RSTYLE_NONE;
+    }
+    // the fires (camera facing sprites, and light sources) are hidden
+    for (i = 0; i < MAX_SMOKE_COLUMNS; i++) {
+        flame_style[i] = gSmoke_column[i].flame_actor != NULL ? gSmoke_column[i].flame_actor->render_style : 0;
+        if (gSmoke_column[i].flame_actor != NULL) {
+            gSmoke_column[i].flame_actor->render_style = BR_RSTYLE_NONE;
+        }
     }
     // the marks on the ground (skid marks, blood tracks, oil) are hidden: they lie a little above it and would
     // shadow it
@@ -2499,6 +2507,11 @@ static int DrawSunShadowMap(void) {
         drawn = 1;
     }
     BrActorRemove(sun_camera);
+    for (i = 0; i < MAX_SMOKE_COLUMNS; i++) {
+        if (gSmoke_column[i].flame_actor != NULL) {
+            gSmoke_column[i].flame_actor->render_style = flame_style[i];
+        }
+    }
     for (i = 0; i < SKID_COUNT; i++) {
         if (gSkids[i].actor != NULL) {
             gSkids[i].actor->render_style = decal_style[i];
