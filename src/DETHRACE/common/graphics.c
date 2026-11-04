@@ -2150,8 +2150,7 @@ static void SetNightLighting(br_actor* pCamera) {
         }
     }
     count = AddFlashes(lights, count, pCamera);
-    // (by day with the sun's shadow map, the pedestrians cast their own shadows)
-    if (harness_game_config.gl_pedestrian_shadows && !gSun_shadow_map_drawn) {
+    if (harness_game_config.gl_pedestrian_shadows) {
         // soft blob shadows under the pedestrians: entries with a negative range, the radius, and the world's up
         // (in the camera's space) for their direction; the shader darkens the ground under them
         br_vector3 feet[MAX_SCENE_LIGHTS];
@@ -2167,7 +2166,10 @@ static void SetNightLighting(br_actor* pCamera) {
         for (i = 0; i < peds; i++) {
             // centred under the feet, about as wide as the pedestrian is tall, with a darker middle softly fading
             t = MAX(heights[i] * 0.5f, 0.07f);
-            count = AddSceneLight(lights, count, &feet[i], -t, &up, 0.45f, 0.f, 0.f, 0.f, 0.f);
+            // (by day with the sun's shadow map the pedestrians cast their own shadows, and this is only the
+            // contact shadow under their feet, the shade they give from the sky; in the shade, as in tunnels, it is
+            // what grounds them)
+            count = AddSceneLight(lights, count, &feet[i], -t, &up, gSun_shadow_map_drawn ? 0.22f : 0.45f, 0.f, 0.f, 0.f, 0.f);
         }
     }
     {
