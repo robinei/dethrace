@@ -4844,7 +4844,15 @@
    64,
    64
   ],
-  "file": "CITYA.PIX"
+  "file": "CITYA.PIX",
+  "rects": [
+   [
+    0,
+    0,
+    64,
+    18
+   ]
+  ]
  },
  "MINLIT.PIX": {
   "kind": "lamp",

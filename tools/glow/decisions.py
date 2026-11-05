@@ -4,7 +4,7 @@ def add(names, kind, inten, rule='cand', rects=None, note=''):
     for n in names.split():
         D[n if n.endswith('.PIX') else n + '.PIX'] = (kind, inten, rule, rects, note)
 # track / scenery
-add('INDTEX45 VLTROOF INDTEX46 INDTEX47 MINLIT LITE1 METALIT TRILITE WTWAL4 DECK2 TUNLROOF TUNLWAL2 LITPLATE MNWALITE INDTEX88 INDTEX89 RZLIGHTS LAMPTOP', 'lamp', 0.8, 'bright', note='light fitting')
+add('INDTEX45 VLTROOF INDTEX46 INDTEX47 MINLIT LITE1 TRILITE WTWAL4 DECK2 TUNLROOF TUNLWAL2 LITPLATE MNWALITE INDTEX88 INDTEX89 RZLIGHTS LAMPTOP', 'lamp', 0.8, 'bright', note='light fitting')
 add('SEW1C SEW1D YATHUL', 'lamp', 0.6, 'cand', note='red indicator lights')
 add('LINKUNDR SEALIGHT', 'lamp', 0.8, 'cand', note='fluorescent tube')
 add('TRAFLIT1 TRAFLIT2 TRAFLIT3', 'lamp', 1.0, 'cand', note='traffic light')
@@ -78,4 +78,6 @@ for k in ('FLAMES.PIX', 'APTLITE.PIX', 'RO2DED1.PIX', 'RO3DED1.PIX', 'RO4DED1.PI
     D.pop(k, None)
 
 # glowing lamps whose surroundings share their colour (rock, rusty plates, panels): keep the marked core
+# (the wall lamps: only their row at the top, not the specks of pale concrete below)
+add('METALIT', 'lamp', 0.8, 'bright', rects=[[0, 0, 64, 18]], note='light fitting')
 NO_GROW = set(n + '.PIX' for n in 'DECK2 LITPLATE MINLIT MNWALITE TUNLWAL2 TUNLROOF SEALIGHT TRILITE METALIT'.split())
