@@ -948,6 +948,8 @@ typedef struct br_gl_post_params {
     float shimmers[4 * 8];
     int lamp_count;
     float lamps[8 * 24];
+    int spray_count;
+    float spray[8 * 24];
 } br_gl_post_params;
 br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen, br_boolean glow);
 void BR_PUBLIC_ENTRY BrGLPostProcessDepthSnapshot(br_pixelmap* screen);
@@ -1021,6 +1023,15 @@ void Harness_Hook_SoftParticles(int on) {
 
 static float lamps[8 * 24];
 static int lamp_count;
+static float spray[8 * 24];
+static int spray_count;
+
+void Harness_Hook_Spray(const float* pSpray, int pCount) {
+    spray_count = pCount < 24 ? pCount : 24;
+    if (spray_count > 0) {
+        memcpy(spray, pSpray, sizeof(float) * 8 * spray_count);
+    }
+}
 
 static float weather_open = 1.f;
 
@@ -1076,6 +1087,11 @@ void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, f
         params.weather[1] = harness_game_config.gl_weather * weather_open;
         // (at night the rain catches the city's lights: brighter than the snow)
         params.weather[2] = night ? (reflective_texture_count > 0 ? 0.25f : 0.55f) + 0.5f * harness_game_config.gl_night_brightness : 0.95f;
+    }
+    // the spray off the wheels in the rain
+    params.spray_count = params.weather[0] > 0.5f && params.weather[1] > 0.f ? spray_count : 0;
+    if (params.spray_count > 0) {
+        memcpy(params.spray, spray, sizeof(float) * 8 * spray_count);
     }
     // the air glowing around the lamps at night: more in the rain (and where it falls)
     params.lamp_count = 0;

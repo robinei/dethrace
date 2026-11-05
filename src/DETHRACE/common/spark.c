@@ -1459,7 +1459,8 @@ void GenerateContinuousSmoke(tCar_spec* pCar, int wheel, tU32 pTime) {
 
 #ifdef DETHRACE_3DFX_PATCH
 // Added by dethrace: in the rain, spray thrown up behind the rear wheels on the paved (dustless) surfaces, more
-// the faster the car goes: light grey puffs, quickly gone (the smoke's slots are few)
+// the faster the car goes: its strength for the droplets the post-processing draws (see PostProcessView), and a
+// faint mist hanging behind (light grey puffs, quickly gone)
 void GenerateWetSpray(tCar_spec* pCar, int wheel, tU32 pTime, float pRain) {
     br_vector3 pos;
     br_vector3 v;
@@ -1471,31 +1472,31 @@ void GenerateWetSpray(tCar_spec* pCar, int wheel, tU32 pTime, float pRain) {
     if (pCar->wpos[wheel].v[2] < 0.f) {
         return;
     }
+    // (m/s: from about 25mph, all of it by 80)
+    speed = BrVector3Length(&pCar->velocity_car_space) * WORLD_SCALE * 1000.0f;
+    strength = pRain * (speed - 11.f) / 25.f;
+    if (strength <= 0.f) {
+        return;
+    }
+    pCar->wet_spray[wheel] = MIN(strength, 1.f);
     if (pCar->dust_time[wheel] > pTime) {
         pCar->dust_time[wheel] -= pTime;
         return;
     }
-    pCar->dust_time[wheel] += IRandomBetween(90, 160) - pTime;
+    pCar->dust_time[wheel] += IRandomBetween(120, 220) - pTime;
     if (pCar->dust_time[wheel] < 0) {
         pCar->dust_time[wheel] = 0;
     }
-    // (m/s: from about 30mph, all of it by 90)
-    speed = BrVector3Length(&pCar->velocity_car_space) * WORLD_SCALE * 1000.0f;
-    strength = pRain * (speed - 13.f) / 27.f;
-    if (strength <= 0.f) {
-        return;
-    }
-    strength = MIN(strength, 1.f) * 0.55f;
-    // just behind the tyre on the ground, thrown up and back, slower than the car (hanging behind it a moment)
+    // just behind the tyre on the ground, slower than the car (hanging behind it a moment)
     BrVector3InvScale(&tv, &pCar->wpos[wheel], WORLD_SCALE);
     tv.v[1] -= pCar->oldd[wheel] / WORLD_SCALE_D;
-    tv.v[2] += 0.03f;
+    tv.v[2] += 0.05f;
     BrMatrix34ApplyP(&pos, &tv, &pCar->car_master_actor->t.t.mat);
     BrVector3Scale(&tv, &pCar->velocity_car_space, WORLD_SCALE * 1000.0f * 0.75f);
-    tv.v[0] += FRandomBetween(-1.5f, 1.5f);
-    tv.v[1] += FRandomBetween(1.5f, 3.f);
+    tv.v[0] += FRandomBetween(-1.f, 1.f);
+    tv.v[1] += FRandomBetween(0.5f, 1.5f);
     BrMatrix34ApplyV(&v, &tv, &pCar->car_master_actor->t.t.mat);
-    CreatePuffOfSmoke(&pos, &v, strength, 1.f, 4, pCar);
+    CreatePuffOfSmoke(&pos, &v, pCar->wet_spray[wheel] * 0.2f, 1.f, 4, pCar);
 }
 #endif
 

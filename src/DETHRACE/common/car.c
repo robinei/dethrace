@@ -1318,6 +1318,9 @@ void FinishCars(tU32 pLast_frame_time, tU32 pTime) {
             }
 #endif
             for (wheel = 0; wheel < 4; wheel++) {
+#ifdef DETHRACE_3DFX_PATCH
+                car->wet_spray[wheel] = 0.f;
+#endif
                 if (car->oldd[wheel] < car->susp_height[wheel >> 1] && gCurrent_race.material_modifiers[car->material_index[wheel]].smoke_type >= 2 && !car->doing_nothing_flag) {
                     GenerateContinuousSmoke(car, wheel, pTime);
                 }

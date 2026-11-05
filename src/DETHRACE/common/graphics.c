@@ -2456,6 +2456,56 @@ static void PassLamps(br_matrix34* pTo_camera, br_matrix34* pTo_world) {
     Harness_Hook_Lamps(out, count);
 }
 
+// Added by dethrace: the rear wheels throwing up spray off the wet road (see GenerateWetSpray), to the
+// post-processing which draws the droplets: world position behind the tyre and strength, the car's velocity
+// (world units a second). The nearest to the camera
+static void PassSpray(br_matrix34* pTo_world) {
+    float out[8 * 24];
+    br_vector3 cam;
+    br_vector3 tv;
+    br_vector3 pos;
+    tCar_spec* car;
+    int count;
+    int cat;
+    int car_count;
+    int i;
+    int wheel;
+
+    count = 0;
+    BrVector3Set(&cam, pTo_world->m[3][0], pTo_world->m[3][1], pTo_world->m[3][2]);
+    for (cat = eVehicle_self; cat <= eVehicle_rozzer && count < 24; cat++) {
+        car_count = cat == eVehicle_self ? 1 : GetCarCount(cat);
+        for (i = 0; i < car_count && count < 24; i++) {
+            car = cat == eVehicle_self ? &gProgram_state.current_car : GetCarSpec(cat, i);
+            if (car == NULL || car->car_master_actor == NULL || car->car_master_actor->render_style == BR_RSTYLE_NONE) {
+                continue;
+            }
+            for (wheel = 0; wheel < 4 && count < 24; wheel++) {
+                if (car->wet_spray[wheel] <= 0.f) {
+                    continue;
+                }
+                BrVector3InvScale(&tv, &car->wpos[wheel], WORLD_SCALE);
+                tv.v[1] -= car->oldd[wheel] / WORLD_SCALE_D;
+                tv.v[2] += 0.03f;
+                BrMatrix34ApplyP(&pos, &tv, &car->car_master_actor->t.t.mat);
+                if (Vector3DistanceSquared(&pos, &cam) > 20.f * 20.f) {
+                    continue;
+                }
+                out[8 * count + 0] = pos.v[0];
+                out[8 * count + 1] = pos.v[1];
+                out[8 * count + 2] = pos.v[2];
+                out[8 * count + 3] = car->wet_spray[wheel];
+                out[8 * count + 4] = car->v.v[0] / WORLD_SCALE;
+                out[8 * count + 5] = car->v.v[1] / WORLD_SCALE;
+                out[8 * count + 6] = car->v.v[2] / WORLD_SCALE;
+                out[8 * count + 7] = (float)(count * 7 % 24);
+                count++;
+            }
+        }
+    }
+    Harness_Hook_Spray(out, count);
+}
+
 // Added by dethrace: how much of the weather falls, by whether there is a roof over the car (a ray straight up
 // into the track): once that has stayed the same for 2 seconds, the weather fades out (or back in) over one
 static float WeatherOpen(void) {
@@ -2540,6 +2590,7 @@ static void PostProcessView(void) {
     mph = fabsf(gCar_to_view->speedo_speed) * WORLD_SCALE / 1600.f * 3600000.f;
     Harness_Hook_WeatherOpen(WeatherOpen());
     PassLamps(&to_camera, &to_world);
+    PassSpray(&to_world);
     // (the draw distance, which the depth of field goes by, not the far plane, which DrawEverything moves out)
     Harness_Hook_PostProcessEnd(gScreen, ((br_camera*)gCamera->type_data)->hither_z, MIN(((br_camera*)gCamera->type_data)->yon_z, gYon_multiplier * gCamera_yon),
         gAction_replay_mode ? 0.f : MAX(0.f, MIN(1.f, (mph - 70.f) / 80.f)), gNight, up, &to_world.m[0][0], fires, fire_count);

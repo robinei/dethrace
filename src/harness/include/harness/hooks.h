@@ -196,6 +196,9 @@ int Harness_GlowLamp(const char* identifier, const unsigned char** indices, floa
 // The lamps near the camera for the air glowing around them at night: 8 floats each, view space position and
 // size, colour and strength
 void Harness_Hook_Lamps(const float* pLamps, int pCount);
+// The rear wheels throwing up spray off the wet road: 8 floats each, world position behind the tyre and strength,
+// the car's velocity (world units a second) and a seed
+void Harness_Hook_Spray(const float* pSpray, int pCount);
 
 // glrend callbacks
 int Harness_GL_SceneLighting(float* brightness, const float** lights);

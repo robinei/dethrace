@@ -878,6 +878,9 @@ typedef struct tCar_spec_struct {              // size: 0x1a9c
     tU32 repair_time;                          // @0x1a88
     int power_up_levels[3];                    // @0x1a8c
     tS3_sound_tag horn_sound_tag;              // @0x1a98
+#ifdef DETHRACE_3DFX_PATCH
+    float wet_spray[4]; // Added by dethrace: how much spray each wheel throws up off the wet road, see GenerateWetSpray
+#endif
 } tCar_spec;
 
 typedef struct tOppo_psyche {
