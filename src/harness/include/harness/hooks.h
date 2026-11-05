@@ -193,6 +193,9 @@ float Harness_RainSpray(void);
 // Lamps, neon and signs (see Harness_GlowLamp): whether a texture is one, its light palette indices (a bit mask) and
 // intensity. Returns 0 if not (or with no glow, or LampHaze off)
 int Harness_GlowLamp(const char* identifier, const unsigned char** indices, float* intensity);
+// Car headlight textures (see the glow table): whether it is one, and the rectangles of it that are the lights
+// (texels: x, y, width, height each; none for all of it)
+int Harness_GlowHeadlight(const char* identifier, const short** rects, int* rect_count);
 // The lamps near the camera for the air glowing around them at night: 8 floats each, view space position and
 // size, colour and strength
 void Harness_Hook_Lamps(const float* pLamps, int pCount);

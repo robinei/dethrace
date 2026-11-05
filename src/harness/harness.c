@@ -1166,6 +1166,21 @@ float Harness_GL_TextureGlow(const char* identifier, const unsigned char** indic
     return entry->intensity;
 }
 
+int Harness_GlowHeadlight(const char* identifier, const short** rects, int* rect_count) {
+    const tGlow_entry* entry;
+
+    if (identifier == NULL) {
+        return 0;
+    }
+    entry = bsearch(identifier, gGlow_table, gGlow_table_count, sizeof(tGlow_entry), glow_compare);
+    if (entry == NULL || entry->light_type != eGlow_light_head) {
+        return 0;
+    }
+    *rects = entry->rects;
+    *rect_count = entry->rect_count;
+    return 1;
+}
+
 int Harness_GlowLamp(const char* identifier, const unsigned char** indices, float* intensity) {
     const tGlow_entry* entry;
 

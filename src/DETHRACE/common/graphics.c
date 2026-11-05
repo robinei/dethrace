@@ -2125,6 +2125,81 @@ static int AddSceneLight(float* pLights, int pCount, br_vector3* pPos, br_scalar
     return pCount + 1;
 }
 
+// Added by dethrace: where a car model's headlights are (the faces showing the glow table's headlight texels),
+// left and right in model space: found once per model. Returns 0 if it has none marked
+static int FindHeadlights(br_model* pModel, br_vector3* pLeft, br_vector3* pRight) {
+    static struct {
+        br_model* model;
+        int found;
+        br_vector3 side[2];
+    } cache[64];
+    static int next;
+    br_vector3 sum[2];
+    br_vector3 c;
+    br_scalar weight[2];
+    const short* rects;
+    int rect_count;
+    br_face* face;
+    br_pixelmap* map;
+    float u;
+    float v;
+    int i;
+    int f;
+    int k;
+    int s;
+    int in;
+
+    for (i = 0; i < COUNT_OF(cache); i++) {
+        if (cache[i].model == pModel) {
+            *pLeft = cache[i].side[0];
+            *pRight = cache[i].side[1];
+            return cache[i].found;
+        }
+    }
+    BrVector3Set(&sum[0], 0.f, 0.f, 0.f);
+    BrVector3Set(&sum[1], 0.f, 0.f, 0.f);
+    weight[0] = weight[1] = 0.f;
+    for (f = 0; f < pModel->nfaces; f++) {
+        face = &pModel->faces[f];
+        map = face->material != NULL ? face->material->colour_map : NULL;
+        if (map == NULL || map->identifier == NULL || !Harness_GlowHeadlight(map->identifier, &rects, &rect_count)) {
+            continue;
+        }
+        // (the face's middle in the texture, in texels, within a light's rectangle)
+        u = v = 0.f;
+        BrVector3Set(&c, 0.f, 0.f, 0.f);
+        for (k = 0; k < 3; k++) {
+            u += pModel->vertices[face->vertices[k]].map.v[0] / 3.f;
+            v += pModel->vertices[face->vertices[k]].map.v[1] / 3.f;
+            BrVector3Accumulate(&c, &pModel->vertices[face->vertices[k]].p);
+        }
+        BrVector3InvScale(&c, &c, 3.f);
+        u = (u - floorf(u)) * map->width;
+        v = (v - floorf(v)) * map->height;
+        in = rect_count == 0;
+        for (k = 0; k < rect_count && !in; k++) {
+            in = u >= rects[4 * k] && u < rects[4 * k] + rects[4 * k + 2] && v >= rects[4 * k + 1] && v < rects[4 * k + 1] + rects[4 * k + 3];
+        }
+        if (!in) {
+            continue;
+        }
+        s = c.v[0] < 0.f ? 0 : 1;
+        BrVector3Accumulate(&sum[s], &c);
+        weight[s] += 1.f;
+    }
+    i = next;
+    next = (next + 1) % COUNT_OF(cache);
+    cache[i].model = pModel;
+    cache[i].found = weight[0] > 0.f && weight[1] > 0.f;
+    if (cache[i].found) {
+        BrVector3InvScale(&cache[i].side[0], &sum[0], weight[0]);
+        BrVector3InvScale(&cache[i].side[1], &sum[1], weight[1]);
+    }
+    *pLeft = cache[i].side[0];
+    *pRight = cache[i].side[1];
+    return cache[i].found;
+}
+
 // Added by dethrace: tail lights glow brighter while the car brakes
 static void UpdateBrakeLights(tCar_spec* pCar, br_actor* pActor) {
     br_model* model;
@@ -2291,12 +2366,21 @@ static void SetNightLighting(br_actor* pCamera) {
                 continue;
             }
             b = &actor->model->bounds;
+            {
+                br_vector3 lamp_at[2];
+                int marked = FindHeadlights(actor->model, &lamp_at[0], &lamp_at[1]);
             for (side = -1; side <= 1; side += 2) {
-                // at the front corners (cars face -z), a little below half height, aimed slightly down
-                BrVector3Set(&p,
-                    (b->min.v[0] + b->max.v[0]) / 2.f + side * (b->max.v[0] - b->min.v[0]) * 0.33f,
-                    b->min.v[1] + (b->max.v[1] - b->min.v[1]) * 0.35f,
-                    b->min.v[2]);
+                if (marked) {
+                    // at the headlights themselves
+                    p = lamp_at[side < 0 ? 0 : 1];
+                } else {
+                    // else at the front corners (cars face -z), a little below half height
+                    BrVector3Set(&p,
+                        (b->min.v[0] + b->max.v[0]) / 2.f + side * (b->max.v[0] - b->min.v[0]) * 0.33f,
+                        b->min.v[1] + (b->max.v[1] - b->min.v[1]) * 0.35f,
+                        b->min.v[2]);
+                }
+                // (aimed slightly down)
                 BrVector3Set(&d, 0.f, -0.1f, -1.f);
                 BrMatrix34ApplyP(&pv, &p, &to_camera);
                 BrMatrix34ApplyV(&dv, &d, &to_camera);
@@ -2304,6 +2388,7 @@ static void SetNightLighting(br_actor* pCamera) {
                 // range about 60m, warm white
                 count = AddSceneLight(lights, count, &pv, 9.f, &dv, harness_game_config.gl_headlight_strength,
                     1.f, 0.95f, 0.82f, haze);
+            }
             }
         }
     }
