@@ -1161,8 +1161,7 @@ int Harness_GlowLamp(const char* identifier, const unsigned char** indices, floa
         return 0;
     }
     *indices = entry->indices;
-    // (neon and signs light little of what is around them)
-    *intensity = entry->intensity * (entry->lamp == 2 ? 0.35f : 1.f);
+    *intensity = entry->intensity;
     return 1;
 }
 

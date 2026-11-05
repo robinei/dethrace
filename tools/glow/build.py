@@ -13,7 +13,6 @@ def rule_ok(rule, i):
     h, s, v = hsv[i]
     if rule == 'cand': return CAND[i]
     if rule == 'bright': return v >= 0.75
-    if rule == 'core': return v >= 0.92
     if rule == 'fire': return v >= 0.45
     if rule == 'rects': return v >= 0.55
 def inrects(rects, x, y):
