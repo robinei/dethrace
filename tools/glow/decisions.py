@@ -78,6 +78,7 @@ for k in ('FLAMES.PIX', 'APTLITE.PIX', 'RO2DED1.PIX', 'RO3DED1.PIX', 'RO4DED1.PI
     D.pop(k, None)
 
 # glowing lamps whose surroundings share their colour (rock, rusty plates, panels): keep the marked core
-# (the wall lamps: only their row at the top, not the specks of pale concrete below)
-add('METALIT', 'lamp', 0.8, 'bright', rects=[[0, 0, 64, 18]], note='light fitting')
+# (the wall lamps: only the cores of their row at the top, not the pale concrete around them, which some walls
+# stretch)
+add('METALIT', 'lamp', 0.8, 'core', rects=[[0, 0, 64, 18]], note='light fitting')
 NO_GROW = set(n + '.PIX' for n in 'DECK2 LITPLATE MINLIT MNWALITE TUNLWAL2 TUNLROOF SEALIGHT TRILITE METALIT'.split())
