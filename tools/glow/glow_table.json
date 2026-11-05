@@ -4820,31 +4820,6 @@
    ]
   ]
  },
- "METALIT.PIX": {
-  "kind": "lamp",
-  "indices": [
-   79,
-   174,
-   175,
-   254,
-   255
-  ],
-  "intensity": 0.8,
-  "note": "light fitting",
-  "size": [
-   64,
-   64
-  ],
-  "file": "CITYA.PIX",
-  "rects": [
-   [
-    0,
-    0,
-    64,
-    18
-   ]
-  ]
- },
  "MINLIT.PIX": {
   "kind": "lamp",
   "indices": [
