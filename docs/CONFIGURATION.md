@@ -214,7 +214,8 @@ DrawEverything = 0
 MaxDetail = 0
 
 ; Only used in 3dfx mode. Multisample anti-aliasing sample count (0 to disable, typically 2, 4 or 8). With
-; post-processing effects on, only the race view is anti-aliased (not the map view or the menus' 3D)
+; post-processing effects on, only the race view is anti-aliased (not the map view or the menus' 3D), and with
+; SoftParticles not what is drawn from the soft particles on (splashes, smoke, sparks)
 MSAA = 4
 
 ; Only used in 3dfx mode. Magnify textures 2x at load time with a pixel-art upscaler: "none" (disabled),
