@@ -41,7 +41,6 @@
 
 #define ARRAY_SIZE(A) (sizeof(A) / sizeof(A[0]))
 #define MAX_STACK_FRAMES 64
-static int stack_nbr = 0;
 static char _program_name[1024];
 
 static void* stack_traces[MAX_STACK_FRAMES];
@@ -50,64 +49,30 @@ static DIR* directory_iterator;
 
 static void* signal_alternative_stack;
 
-struct dl_iterate_callback_data {
-    int initialized;
-    intptr_t start;
-} dethrace_dl_data;
-
 #if SUPPORT_TRACEBACK
-static int dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* data) {
-    struct dl_iterate_callback_data* callback_data = data;
-
-    if (strcmp(info->dlpi_name, "") == 0) {
-        callback_data->start = info->dlpi_addr;
-    }
-    return 0;
-}
-
-static intptr_t get_dethrace_offset(void) {
-    if (!dethrace_dl_data.initialized) {
-        dethrace_dl_data.initialized = 1;
-        dl_iterate_phdr(dl_iterate_callback, &dethrace_dl_data);
-    }
-    return dethrace_dl_data.start;
-}
-
-// Resolve symbol name and source location given the path to the executable and an address
-int addr2line(char const* const program_name, void const* const addr) {
-    char addr2line_cmd[512];
-
-    /* have addr2line map the address to the related line in the code */
-    sprintf(addr2line_cmd, "addr2line -f -p -e %.480s %p", program_name, addr - get_dethrace_offset());
-
-    fprintf(stderr, "%d: ", stack_nbr++);
-    return system(addr2line_cmd);
-}
-
+// The stack, as the frames' addresses (in the executable: its offsets, for addr2line -f -p -e). Without allocating
+// or starting a process: after a heap corruption those could hang, the game frozen
 static void print_stack_trace(void) {
-    int i, trace_size = 0;
-    char** messages = (char**)NULL;
+    int trace_size;
 
-    fputs("\nStack trace:\n", stderr);
-
+    fputs("\nStack trace (addr2line -f -p -e ", stderr);
+    fputs(_program_name, stderr);
+    fputs(" with the offsets):\n", stderr);
     trace_size = backtrace(stack_traces, MAX_STACK_FRAMES);
-    messages = backtrace_symbols(stack_traces, trace_size);
-
-    /* skip the first couple stack frames (as they are this function and
-     our handler) and also skip the last frame as it's (always?) junk. */
-    for (i = 3; i < (trace_size - 1); ++i) {
-        if (addr2line(_program_name, stack_traces[i]) != 0) {
-            printf("  error determining line # for: %s\n", messages[i]);
-        }
-    }
-    if (messages) {
-        free(messages);
+    /* (the first two frames: this function and the handler) */
+    if (trace_size > 2) {
+        backtrace_symbols_fd(stack_traces + 2, trace_size - 2, STDERR_FILENO);
     }
 }
 #endif
 
 static void signal_handler(int sig, siginfo_t* siginfo, void* context) {
+    sigset_t unblock;
+
     (void)context;
+    // whatever happens in here, the process ends: in 5 s at the latest (alarm's default action)
+    signal(SIGALRM, SIG_DFL);
+    alarm(5);
     fputs("\n******************\n", stderr);
 
     switch (sig) {
@@ -192,7 +157,14 @@ static void signal_handler(int sig, siginfo_t* siginfo, void* context) {
 #if SUPPORT_TRACEBACK
     print_stack_trace();
 #endif
-    exit(1);
+    // the signal again, handled as by default: the process ends as it would have (with a core dump where that
+    // is the default), not through exit's handlers, which could hang after a crash
+    signal(sig, SIG_DFL);
+    sigemptyset(&unblock);
+    sigaddset(&unblock, sig);
+    sigprocmask(SIG_UNBLOCK, &unblock, NULL);
+    raise(sig);
+    _exit(128 + sig);
 }
 
 void resolve_full_path(char* path, const char* argv0) {
@@ -210,6 +182,10 @@ void resolve_full_path(char* path, const char* argv0) {
 
 void OS_InstallSignalHandler(char* program_name) {
     resolve_full_path(_program_name, program_name);
+#if SUPPORT_TRACEBACK
+    // (backtrace loads what it needs the first time: here, not in the handler)
+    backtrace(stack_traces, 1);
+#endif
 
     /* setup alternate stack */
     {
