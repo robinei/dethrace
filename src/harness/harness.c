@@ -1012,7 +1012,8 @@ int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, int level, const float* wo
         || level < 0 || level >= 3) {
         return 0;
     }
-    if (BrGLShadowPassBegin(screen, harness_game_config.gl_shadow_map_size, level) != BRE_OK) {
+    // (the farthest level, the whole track, at half the size: its texels about as wide on screen as the others')
+    if (BrGLShadowPassBegin(screen, level == 2 ? harness_game_config.gl_shadow_map_size / 2 : harness_game_config.gl_shadow_map_size, level) != BRE_OK) {
         return 0;
     }
     memcpy(shadow_view[level], world_to_light, sizeof(shadow_view[level]));
