@@ -1318,7 +1318,12 @@ void DrawMapBlip(tCar_spec* pCar, tU32 pTime, br_matrix34* pTrans, br_vector3* p
         }
     }
     // Draw a rectangle around the fox
+#ifdef DETHRACE_FIX_BUGS
+    // (the original indexes the two colours with pTime & period, 0 or 256: past the array, reading the stack)
+    colour = colours[(pTime & period) != 0];
+#else
     colour = colours[pTime & period];
+#endif
     if (gNet_mode != eNet_mode_none && gCurrent_net_game->type == eNet_game_type_foxy && gNet_players[gIt_or_fox].car == pCar) {
         BrPixelmapLine(gBack_screen, map_pos.v[0] - 8.f, map_pos.v[1] - 8.f, map_pos.v[0] + 8.f, map_pos.v[1] - 8.f, colour);
         BrPixelmapLine(gBack_screen, map_pos.v[0] - 8.f, map_pos.v[1] + 8.f, map_pos.v[0] + 8.f, map_pos.v[1] + 8.f, colour);
