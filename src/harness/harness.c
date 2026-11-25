@@ -967,13 +967,18 @@ static char reflective_textures[32][32];
 static int reflective_texture_count;
 void BR_PUBLIC_ENTRY BrGLPostProcessEnd(br_pixelmap* screen, const br_gl_post_params* params);
 
-int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
-    if (!harness_game_config.opengl_3dfx_mode || screen == NULL
-        || !(harness_game_config.gl_depth_of_field || harness_game_config.gl_glow || harness_game_config.gl_ssao
+// Whether the 3D view is post-processed (drawn offscreen, then into the window)
+int Harness_PostProcessing(void) {
+    return harness_game_config.opengl_3dfx_mode
+        && (harness_game_config.gl_depth_of_field || harness_game_config.gl_glow || harness_game_config.gl_ssao
             || harness_game_config.gl_speed_blur || harness_game_config.gl_heat_shimmer || harness_game_config.gl_colour_grading
             || harness_game_config.gl_sun_shadows > 0.f || harness_game_config.gl_sun_highlights > 0.f
             || harness_game_config.gl_weather > 0.f
-            || ((harness_game_config.gl_wet_roads > 0.f || harness_game_config.gl_ice_reflections > 0.f || harness_game_config.gl_water_reflections > 0.f || harness_game_config.gl_car_reflections > 0.f) && harness_game_config.gl_glow))) {
+            || ((harness_game_config.gl_wet_roads > 0.f || harness_game_config.gl_ice_reflections > 0.f || harness_game_config.gl_water_reflections > 0.f || harness_game_config.gl_car_reflections > 0.f) && harness_game_config.gl_glow));
+}
+
+int Harness_Hook_PostProcessBegin(br_pixelmap* screen) {
+    if (screen == NULL || !Harness_PostProcessing()) {
         return 0;
     }
     if (BrGLPostProcessBegin(screen, harness_game_config.gl_glow) != BRE_OK) {

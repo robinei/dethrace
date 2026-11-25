@@ -505,7 +505,11 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
         // Framebuffer attributes must be set before the window is created (the visual is picked then).
         // SDL defaults to a 16-bit depth buffer, which z-fights badly with extended draw distances.
         SDL2_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-        if (harness_game_config.msaa_samples > 0) {
+        // Multisampled only where the 3D is drawn into the window. Post-processed, the game's view is drawn
+        // offscreen, multisampled there (see BrGLPostProcessBegin); a multisampled window would cost the
+        // post-processing a multisampled pass into it, resolved. (The map view and the menus' 3D, drawn into the
+        // window, then have none)
+        if (harness_game_config.msaa_samples > 0 && !Harness_PostProcessing()) {
             SDL2_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
             SDL2_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, harness_game_config.msaa_samples);
         }
@@ -514,7 +518,7 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
             SDL_WINDOWPOS_CENTERED,
             window_width, window_height,
             extra_window_flags | SDL_WINDOW_OPENGL);
-        if (window == NULL && harness_game_config.msaa_samples > 0) {
+        if (window == NULL && harness_game_config.msaa_samples > 0 && !Harness_PostProcessing()) {
             LOG_WARN2("Failed to create window with %dx MSAA, retrying without", harness_game_config.msaa_samples);
             SDL2_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
             SDL2_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);

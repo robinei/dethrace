@@ -146,6 +146,7 @@ void Harness_Hook_Hud2dEnd(void);
 
 // Post-processing of the 3d view (OpenGL mode, depth of field). Begin returns whether it is in effect;
 // End is then called with the view camera's depth range
+int Harness_PostProcessing(void);
 int Harness_Hook_PostProcessBegin(br_pixelmap* screen);
 // While post-processing: the world drawn so far is what the ambient occlusion is made from (not the
 // pedestrian sprites, smoke and sparks drawn after it)

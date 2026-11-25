@@ -213,7 +213,8 @@ DrawEverything = 0
 ; and always use the most detailed car models
 MaxDetail = 0
 
-; Only used in 3dfx mode. Multisample anti-aliasing sample count (0 to disable, typically 2, 4 or 8)
+; Only used in 3dfx mode. Multisample anti-aliasing sample count (0 to disable, typically 2, 4 or 8). With
+; post-processing effects on, only the race view is anti-aliased (not the map view or the menus' 3D)
 MSAA = 4
 
 ; Only used in 3dfx mode. Magnify textures 2x at load time with a pixel-art upscaler: "none" (disabled),

@@ -630,6 +630,7 @@ void PDAllocateScreenAndBack(void) {
     gl_callbacks.texture_slot = Harness_GL_TextureSlot;
     gl_callbacks.slot_wear = Harness_GL_SlotWear;
             gl_callbacks.fog_distance = harness_game_config.gl_distance_fog;
+            gl_callbacks.msaa_samples = harness_game_config.msaa_samples;
             gl_callbacks.get_viewport = gHarness_platform.GetViewport;
             gl_callbacks.adjust_render_viewport = Harness_GL_AdjustRenderViewport;
             gl_callbacks.texture_upscaler = harness_game_config.texture_upscaler;
