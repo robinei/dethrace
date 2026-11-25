@@ -554,4 +554,8 @@ void ShowSpecialVolumes(void);
 
 void HideSpecialVolumes(void);
 
+#ifdef DETHRACE_3DFX_PATCH
+int GroovingActors(br_actor** pActors, int pMax);
+#endif
+
 #endif

@@ -313,4 +313,8 @@ int SwitchToLoresMode(void);
 
 void DRPixelmapDoubledCopy(br_pixelmap* pDestn, br_pixelmap* pSource, int pSource_width, int pSource_height, int pX_offset, int pY_offset);
 
+#ifdef DETHRACE_3DFX_PATCH
+void SunShadowsNewTrack(void);
+#endif
+
 #endif

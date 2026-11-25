@@ -164,7 +164,9 @@ void Harness_MapWindowUpdate(void);
 // (by the platform: whether the map's own window is to be opened)
 int Harness_MapWindowEnabled(void);
 void Harness_Hook_Sprites(int on);
-int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, int level, const float* world_to_light);
+// cache: 0 draws the map; 1 draws its cache (what doesn't move), 2 starts it from the cache (what moves is drawn
+// on top: fails if the cache wasn't drawn at this size). scale: its width over the far level's usual (400 units)
+int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, int level, const float* world_to_light, float scale, int cache);
 void Harness_Hook_ShadowPassEnd(br_pixelmap* screen);
 // speed: 0..1 for the speed blur; fires: camera space position and strength of up to 8 fires (heat shimmer)
 void Harness_Hook_PostProcessEnd(br_pixelmap* screen, float hither, float yon, float speed, int night, const float* up, const float* to_world, const float* fires, int fire_count);

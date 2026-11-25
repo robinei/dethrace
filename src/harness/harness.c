@@ -10,6 +10,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -965,7 +966,7 @@ typedef struct br_gl_post_params {
 br_error BR_PUBLIC_ENTRY BrGLPostProcessBegin(br_pixelmap* screen, br_boolean glow);
 void BR_PUBLIC_ENTRY BrGLPostProcessDepthSnapshot(br_pixelmap* screen);
 void BR_PUBLIC_ENTRY BrGLPostProcessSoftParticles(br_pixelmap* screen, float distance);
-br_error BR_PUBLIC_ENTRY BrGLShadowPassBegin(br_pixelmap* screen, int size, int level);
+br_error BR_PUBLIC_ENTRY BrGLShadowPassBegin(br_pixelmap* screen, int size, int level, int cache);
 void BR_PUBLIC_ENTRY BrGLShadowPassEnd(br_pixelmap* screen);
 void BR_PUBLIC_ENTRY BrGLSprites(br_pixelmap* screen, int on);
 // world to the cameras of the sun's shadow maps (levels), for the post-processing
@@ -1007,13 +1008,26 @@ void Harness_Hook_PostProcessDepthSnapshot(void) {
 
 // The sun's shadow map: whether to draw it (by day, with SunShadows), the scene drawn in between with the sun's
 // camera; pWorld_to_light: world to that camera
-int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, int level, const float* world_to_light) {
+int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, int level, const float* world_to_light, float scale, int cache) {
+    int size;
+
     if (!harness_game_config.opengl_3dfx_mode || harness_game_config.gl_sun_shadows <= 0.f || screen == NULL
         || level < 0 || level >= 3) {
         return 0;
     }
-    // (the farthest level, the whole track, at half the size: its texels about as wide on screen as the others')
-    if (BrGLShadowPassBegin(screen, level == 2 ? harness_game_config.gl_shadow_map_size / 2 : harness_game_config.gl_shadow_map_size, level) != BRE_OK) {
+    size = harness_game_config.gl_shadow_map_size;
+    if (level == 2) {
+        // (the farthest level, the whole track: 400 units at half the size, its texels about as wide on screen as
+        // the others'; as many texels a unit at its width, up to twice the size)
+        size = (int)ceilf(size / 2 * scale / 64.f) * 64;
+        if (size > 2 * harness_game_config.gl_shadow_map_size) {
+            size = 2 * harness_game_config.gl_shadow_map_size;
+        }
+        if (size < 64) {
+            size = 64;
+        }
+    }
+    if (BrGLShadowPassBegin(screen, size, level, cache) != BRE_OK) {
         return 0;
     }
     memcpy(shadow_view[level], world_to_light, sizeof(shadow_view[level]));

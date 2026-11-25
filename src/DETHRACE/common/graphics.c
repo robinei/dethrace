@@ -2744,9 +2744,10 @@ static float KickCamera(int pExternal) {
 
 #ifdef DETHRACE_3DFX_PATCH
 // Added by dethrace: the sun's shadow maps (SunShadows), cascaded. The whole world is drawn again from the sun
-// (the same direction as the sun shading) into three maps, each with a parallel camera covering a square
-// around (and a little ahead of) the camera, the nearer ones smaller and sharper. The cameras never turn (the
-// sun is fixed) and move in whole shadow texels, so the shadows stand still. Returns whether they were drawn
+// (the same direction as the sun shading) into three maps, each with a parallel camera: the nearer two covering
+// a square around (and a little ahead of) the camera, the nearer one smaller and sharper, the far one the whole
+// track. The cameras never turn (the sun is fixed), and the nearer two move in whole shadow texels, so the
+// shadows stand still. Returns whether they were drawn
 #define SUN_SHADOW_LEVELS 3
 
 // A sprite (lollipop) turned to face the sun (along the ground), keeping its position, size and any mirroring:
@@ -2784,6 +2785,156 @@ static br_uintptr_t TurnSpriteToSunCB(br_actor* pActor, void* pArg) {
     return 0;
 }
 
+// The far level covers the whole track, from a fixed place: what doesn't move (the track, less what the grooves
+// move) is drawn once into its cache, and each frame only what moves is drawn on top of a copy (the cars, the
+// non-cars knocked loose, debris, the pedestrians, what the grooves move). A non-car knocked loose leaves the
+// track for the cars' actor, and returns to it where it comes to rest, so the cache is drawn again when the
+// knocked loose ones change (at most twice a second, the far map in between a little out of date), and on
+// anything else that changes the track (the accessories shown, a new track, the action replay)
+#define SUN_SHADOW_FAR 2
+#define SUN_SHADOW_MAX_GROOVES 256
+static struct {
+    int frame_serial;   // (of the track its frame was worked out for)
+    int unavailable;    // (the cache couldn't be made)
+    int built;          // the cache drawn
+    tU32 built_at;
+    tU32 signature;     // of what it was drawn with
+    br_vector3 centre;  // the map's centre, in its axes, its width and depth
+    float width;
+    float depth;
+    int rebuilds;       // (for the log)
+} gFar_shadow;
+static int gSun_track_serial = 1;
+
+void SunShadowsNewTrack(void) {
+    gSun_track_serial++;
+}
+
+// what the far map's cache was drawn with: the non-cars knocked loose (out of the track), the accessories
+static tU32 FarShadowSignature(void) {
+    tU32 h;
+    int i;
+
+    h = 2166136261u ^ (tU32)gNum_active_non_cars ^ ((tU32)gRendering_accessories << 16);
+    for (i = 0; i < gNum_active_non_cars; i++) {
+        h = (h ^ (tU32)(br_uintptr_t)gActive_non_car_list[i]->collision_info.car_master_actor) * 16777619u;
+    }
+    return h;
+}
+
+// the far map's place: around the track and what was added to it, along the sun's axes x, y, z
+static void FarShadowFrame(br_vector3* pX, br_vector3* pY, br_vector3* pZ) {
+    br_actor* actors[2];
+    br_bounds b;
+    br_matrix34 m;
+    br_vector3 corner, w;
+    float lo[3], hi[3], d;
+    int i, j, k, any;
+
+    actors[0] = gProgram_state.track_spec.the_actor;
+    actors[1] = gAdditional_actors;
+    any = 0;
+    for (i = 0; i < 3; i++) {
+        lo[i] = 1e30f;
+        hi[i] = -1e30f;
+    }
+    for (i = 0; i < 2; i++) {
+        if (actors[i] == NULL) {
+            continue;
+        }
+        BrActorToBounds(&b, actors[i]);
+        if (b.min.v[0] > b.max.v[0] || b.min.v[1] > b.max.v[1] || b.min.v[2] > b.max.v[2]) {
+            continue;
+        }
+        BrActorToActorMatrix34(&m, actors[i], gUniverse_actor);
+        for (j = 0; j < 8; j++) {
+            BrVector3Set(&corner, (j & 1) ? b.max.v[0] : b.min.v[0], (j & 2) ? b.max.v[1] : b.min.v[1], (j & 4) ? b.max.v[2] : b.min.v[2]);
+            BrMatrix34ApplyP(&w, &corner, &m);
+            for (k = 0; k < 3; k++) {
+                d = BrVector3Dot(&w, k == 0 ? pX : k == 1 ? pY : pZ);
+                lo[k] = MIN(lo[k], d);
+                hi[k] = MAX(hi[k], d);
+            }
+            any = 1;
+        }
+    }
+    if (!any) {
+        for (i = 0; i < 3; i++) {
+            lo[i] = -200.f;
+            hi[i] = 200.f;
+        }
+    }
+    // (a little room around it)
+    gFar_shadow.width = MAX(hi[0] - lo[0], hi[1] - lo[1]) + 4.f;
+    gFar_shadow.depth = hi[2] - lo[2] + 4.f;
+    BrVector3Set(&gFar_shadow.centre, (lo[0] + hi[0]) / 2.f, (lo[1] + hi[1]) / 2.f, hi[2] + 2.f);
+    gFar_shadow.frame_serial = gSun_track_serial;
+    gFar_shadow.built = 0;
+    LOG_INFO3("Sun shadows: the far map %.0f units across, %.0f deep", gFar_shadow.width, gFar_shadow.depth);
+}
+
+// The casters of the sun's shadows: what the game draws as the world (the whole track, not just the part in view;
+// the cars and other things; the additional actors; not all of the universe, which also holds the skies placed
+// around the cameras: they cast large shadows that moved with the camera), the pedestrians; all of them, only
+// what doesn't move (pMoving 0), or only what moves (1)
+#define SUN_CASTERS_ALL -1
+static void AddSunShadowCasters(int pMoving, br_vector3* pSun_flat, br_actor** pGrooving, int pGrooving_count) {
+    br_uint_8 groove_style[SUN_SHADOW_MAX_GROOVES];
+    int i;
+
+    if (pMoving == 0) {
+        for (i = 0; i < pGrooving_count; i++) {
+            groove_style[i] = pGrooving[i]->render_style;
+            pGrooving[i]->render_style = BR_RSTYLE_NONE;
+        }
+    }
+    if (pMoving != 1) {
+        if (gProgram_state.track_spec.the_actor != NULL) {
+            BrZbSceneRenderAdd(gProgram_state.track_spec.the_actor);
+        }
+        if (gAdditional_actors != NULL) {
+            BrZbSceneRenderAdd(gAdditional_actors);
+        }
+    }
+    if (pMoving == 0) {
+        for (i = pGrooving_count - 1; i >= 0; i--) {
+            pGrooving[i]->render_style = groove_style[i];
+        }
+        return;
+    }
+    if (pMoving == 1) {
+        for (i = 0; i < pGrooving_count; i++) {
+            if (pGrooving[i]->render_style != BR_RSTYLE_NONE) {
+                BrZbSceneRenderAdd(pGrooving[i]);
+            }
+        }
+    }
+    BrZbSceneRenderAdd(gNon_track_actor);
+    for (i = 0; i < gNumber_of_lollipops; i++) {
+        br_actor* sprite = gLollipops[i];
+        br_actor* old_parent;
+        br_matrix34 old_mat;
+        if (sprite == NULL || sprite->render_style != BR_RSTYLE_NONE) {
+            continue;
+        }
+        // (as RenderLollipops draws them)
+        old_parent = sprite->parent;
+        if (old_parent != gDont_render_actor) {
+            BrActorRelink(gDont_render_actor, sprite);
+        }
+        old_mat = sprite->t.t.mat;
+        TurnSpriteToSun(sprite, pSun_flat);
+        sprite->render_style = BR_RSTYLE_FACES;
+        SetPedMaterialForRender(sprite);
+        BrZbSceneRenderAdd(sprite);
+        sprite->render_style = BR_RSTYLE_NONE;
+        sprite->t.t.mat = old_mat;
+        if (old_parent != gDont_render_actor) {
+            BrActorRelink(old_parent, sprite);
+        }
+    }
+}
+
 static int DrawSunShadowMap(void) {
     // the levels: their half widths (world units), and how far ahead of the camera they are centred. Each takes
     // over where the one inside it ends, where its texels are still about a screen pixel at 4K: near (~200m
@@ -2795,8 +2946,10 @@ static int DrawSunShadowMap(void) {
     br_matrix34 view_to_world;
     br_matrix34 world_to_light;
     br_vector3 x, y, z, centre, ahead, tv, sun_flat;
-    float texel, cx, cy, cz;
-    int i, level, cx_i, cz_i, drawn;
+    float texel, cx, cy, cz, scale;
+    int i, level, cx_i, cz_i, drawn, cache, moving, grooving_count;
+    br_actor* grooving[SUN_SHADOW_MAX_GROOVES];
+    tU32 signature, now;
     br_uint_8 decal_style[SKID_COUNT + COUNT_OF(gOily_spills)];
     br_uint_8 flame_style[COUNT_OF(gSmoke_column)];
 
@@ -2869,20 +3022,40 @@ static int DrawSunShadowMap(void) {
             gOily_spills[i].actor->render_style = BR_RSTYLE_NONE;
         }
     }
+    grooving_count = GroovingActors(grooving, SUN_SHADOW_MAX_GROOVES);
+    // (the far map's cache: not in the action replay, which puts the non-cars back as they were)
+    cache = grooving_count >= 0 && !gAction_replay_mode && !gFar_shadow.unavailable;
+    if (gFar_shadow.frame_serial != gSun_track_serial) {
+        FarShadowFrame(&x, &y, &z);
+    }
+    if (!cache) {
+        grooving_count = 0;
+        gFar_shadow.built = 0;
+    }
     drawn = 0;
     BrActorAdd(gUniverse_actor, sun_camera);
     for (level = 0; level < SUN_SHADOW_LEVELS; level++) {
-        camera->width = 2.f * radius[level];
-        camera->height = 2.f * radius[level];
-        BrVector3Scale(&tv, &ahead, ahead_by[level]);
-        BrVector3Add(&centre, (br_vector3*)view_to_world.m[3], &tv);
-        // moved only in steps of 32 whole texels across the map, and of whole units along the sun, so between
-        // the steps its transform stays exactly the same (the least rounding difference shifts what the casters
-        // cover of the texels along their edges, which then flickered in and out), and the shadows stand still
-        texel = 32.f * 2.f * radius[level] / harness_game_config.gl_shadow_map_size;
-        cx = floorf(BrVector3Dot(&centre, &x) / texel + 0.5f) * texel;
-        cy = floorf(BrVector3Dot(&centre, &y) / texel + 0.5f) * texel;
-        cz = floorf(BrVector3Dot(&centre, &z) + 0.5f) + 100.f;
+        if (level == SUN_SHADOW_FAR) {
+            camera->width = camera->height = gFar_shadow.width;
+            camera->yon_z = gFar_shadow.depth;
+            cx = gFar_shadow.centre.v[0];
+            cy = gFar_shadow.centre.v[1];
+            cz = gFar_shadow.centre.v[2];
+        } else {
+            camera->width = 2.f * radius[level];
+            camera->height = 2.f * radius[level];
+            camera->yon_z = 200.f;
+            BrVector3Scale(&tv, &ahead, ahead_by[level]);
+            BrVector3Add(&centre, (br_vector3*)view_to_world.m[3], &tv);
+            // moved only in steps of 32 whole texels across the map, and of whole units along the sun, so between
+            // the steps its transform stays exactly the same (the least rounding difference shifts what the
+            // casters cover of the texels along their edges, which then flickered in and out), and the shadows
+            // stand still
+            texel = 32.f * 2.f * radius[level] / harness_game_config.gl_shadow_map_size;
+            cx = floorf(BrVector3Dot(&centre, &x) / texel + 0.5f) * texel;
+            cy = floorf(BrVector3Dot(&centre, &y) / texel + 0.5f) * texel;
+            cz = floorf(BrVector3Dot(&centre, &z) + 0.5f) + 100.f;
+        }
         sun_camera->t.type = BR_TRANSFORM_MATRIX34;
         for (i = 0; i < 3; i++) {
             sun_camera->t.t.mat.m[0][i] = x.v[i];
@@ -2891,43 +3064,39 @@ static int DrawSunShadowMap(void) {
             sun_camera->t.t.mat.m[3][i] = x.v[i] * cx + y.v[i] * cy + z.v[i] * cz;
         }
         BrMatrix34Inverse(&world_to_light, &sun_camera->t.t.mat);
-        if (!Harness_Hook_ShadowPassBegin(gScreen, level, &world_to_light.m[0][0])) {
+        scale = level == SUN_SHADOW_FAR ? gFar_shadow.width / 400.f : 1.f;
+        moving = SUN_CASTERS_ALL;
+        if (level == SUN_SHADOW_FAR && cache) {
+            signature = FarShadowSignature();
+            now = PDGetTotalTime();
+            if (!gFar_shadow.built || (signature != gFar_shadow.signature && now - gFar_shadow.built_at >= 500)) {
+                gFar_shadow.built = 0;
+                if (Harness_Hook_ShadowPassBegin(gScreen, level, &world_to_light.m[0][0], scale, 1)) {
+                    BrZbSceneRenderBegin(gUniverse_actor, sun_camera, gRender_screen, gDepth_buffer);
+                    AddSunShadowCasters(0, &sun_flat, grooving, grooving_count);
+                    BrZbSceneRenderEnd();
+                    Harness_Hook_ShadowPassEnd(gScreen);
+                    gFar_shadow.built = 1;
+                    gFar_shadow.built_at = now;
+                    gFar_shadow.signature = signature;
+                    gFar_shadow.rebuilds++;
+                    LOG_INFO2("Sun shadows: the far map's cache drawn (%d)", gFar_shadow.rebuilds);
+                } else {
+                    LOG_WARN("Sun shadows: no cache for the far map, it is drawn whole each frame");
+                    gFar_shadow.unavailable = 1;
+                }
+            }
+            if (gFar_shadow.built && Harness_Hook_ShadowPassBegin(gScreen, level, &world_to_light.m[0][0], scale, 2)) {
+                moving = 1;
+            } else {
+                gFar_shadow.built = 0;
+            }
+        }
+        if (moving == SUN_CASTERS_ALL && !Harness_Hook_ShadowPassBegin(gScreen, level, &world_to_light.m[0][0], scale, 0)) {
             break;
         }
         BrZbSceneRenderBegin(gUniverse_actor, sun_camera, gRender_screen, gDepth_buffer);
-        // what the game draws as the world: the whole track (not just the part in view), the cars and other
-        // things, the additional actors; not all of the universe, which also holds the skies placed around the
-        // cameras (they cast large shadows that moved with the camera)
-        if (gProgram_state.track_spec.the_actor != NULL) {
-            BrZbSceneRenderAdd(gProgram_state.track_spec.the_actor);
-        }
-        BrZbSceneRenderAdd(gNon_track_actor);
-        if (gAdditional_actors != NULL) {
-            BrZbSceneRenderAdd(gAdditional_actors);
-        }
-        for (i = 0; i < gNumber_of_lollipops; i++) {
-            br_actor* sprite = gLollipops[i];
-            br_actor* old_parent;
-            br_matrix34 old_mat;
-            if (sprite == NULL || sprite->render_style != BR_RSTYLE_NONE) {
-                continue;
-            }
-            // (as RenderLollipops draws them)
-            old_parent = sprite->parent;
-            if (old_parent != gDont_render_actor) {
-                BrActorRelink(gDont_render_actor, sprite);
-            }
-            old_mat = sprite->t.t.mat;
-            TurnSpriteToSun(sprite, &sun_flat);
-            sprite->render_style = BR_RSTYLE_FACES;
-            SetPedMaterialForRender(sprite);
-            BrZbSceneRenderAdd(sprite);
-            sprite->render_style = BR_RSTYLE_NONE;
-            sprite->t.t.mat = old_mat;
-            if (old_parent != gDont_render_actor) {
-                BrActorRelink(old_parent, sprite);
-            }
-        }
+        AddSunShadowCasters(moving, &sun_flat, grooving, moving == 1 ? grooving_count : 0);
         BrZbSceneRenderEnd();
         Harness_Hook_ShadowPassEnd(gScreen);
         drawn = 1;

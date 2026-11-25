@@ -1750,6 +1750,34 @@ void KillGroovadelic(int pOwner) {
     }
 }
 
+#ifdef DETHRACE_3DFX_PATCH
+// Added by dethrace: the actors the grooves move or turn (with what they carry), into pActors; how many, or -1 if
+// there are more than pMax
+int GroovingActors(br_actor** pActors, int pMax) {
+    int i;
+    int n;
+    tGroovidelic_spec* the_groove;
+
+    n = 0;
+    if (gGroovidelics_array != NULL) {
+        for (i = 0, the_groove = gGroovidelics_array; i < gGroovidelics_array_size; i++, the_groove++) {
+            if (the_groove->owner == NO_OWNER || the_groove->actor == NULL || the_groove->actor == gGroove_by_proxy_actor) {
+                continue;
+            }
+            if (the_groove->path_type == eGroove_path_none && the_groove->object_type == eGroove_object_none
+                && the_groove->lollipop_mode == eLollipop_none) {
+                continue;
+            }
+            if (n == pMax) {
+                return -1;
+            }
+            pActors[n++] = the_groove->actor;
+        }
+    }
+    return n;
+}
+#endif
+
 // IDA: void __usercall KillFunkotronic(int pOwner@<EAX>)
 // FUNCTION: CARM95 0x004390a0
 void KillFunkotronic(int pOwner) {
@@ -2816,6 +2844,10 @@ void LoadTrack(char* pFile_name, tTrack_spec* pTrack_spec, tRace_info* pRace_inf
     }
     PrintMemoryDump(0, "JUST LOADED IN TRACK ACTOR AND PROCESSED COLUMNS");
     gTrack_actor = pTrack_spec->the_actor;
+#ifdef DETHRACE_3DFX_PATCH
+    // Added by dethrace: the sun's shadows of the track are drawn anew
+    SunShadowsNewTrack();
+#endif
     if (!gRendering_accessories && !gNet_mode) {
         style = BR_RSTYLE_NONE;
         PossibleService();
