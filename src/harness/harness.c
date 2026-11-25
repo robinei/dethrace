@@ -745,6 +745,17 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
     return 1;
 }
 
+// The file listing the renderer's programs built for features (next to the ini file; see BRender's
+// VIDEOI_UseBRenderFeatures)
+const char* Harness_GL_ProgramList(void) {
+    static char path[1024];
+    if (OS_GetPrefPath(path, "dethrace")) {
+        strcpy(path, "./");
+    }
+    strcat(path, "glprograms.txt");
+    return path;
+}
+
 int Harness_ProcessIniFile(void) {
     int i;
     char path[1024];
