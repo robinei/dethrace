@@ -1018,10 +1018,16 @@ int Harness_Hook_ShadowPassBegin(br_pixelmap* screen, int level, const float* wo
     size = harness_game_config.gl_shadow_map_size;
     if (level == 2) {
         // (the farthest level, the whole track: 400 units at half the size, its texels about as wide on screen as
-        // the others'; as many texels a unit at its width, up to twice the size)
+        // the others'; as many texels a unit at its width (the tracks are up to about 700 units across), up to the
+        // size, but not beyond 4096 if that is larger than half the size (with its cache, two maps that size are
+        // kept): further than that its texels grow)
+        int most = harness_game_config.gl_shadow_map_size < 4096 ? harness_game_config.gl_shadow_map_size : 4096;
+        if (most < harness_game_config.gl_shadow_map_size / 2) {
+            most = harness_game_config.gl_shadow_map_size / 2;
+        }
         size = (int)ceilf(size / 2 * scale / 64.f) * 64;
-        if (size > 2 * harness_game_config.gl_shadow_map_size) {
-            size = 2 * harness_game_config.gl_shadow_map_size;
+        if (size > most) {
+            size = most;
         }
         if (size < 64) {
             size = 64;
